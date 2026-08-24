@@ -30,6 +30,8 @@ from pathlib import Path
 import numpy as np
 import scipy.sparse as sp
 
+from .features import GeneFeatures
+
 logger = logging.getLogger(__name__)
 
 
@@ -105,3 +107,37 @@ def neighbourhood_features(adj: sp.csr_matrix, self_weight: float = 1.0) -> np.n
 def coverage(adj: sp.csr_matrix) -> float:
     """Fraction of genes with at least one edge -- how far the network reaches."""
     return float((np.diff(adj.indptr) > 0).mean())
+
+
+def string_features(
+    adj: sp.csr_matrix,
+    genes: np.ndarray,
+    subset: list[str] | None = None,
+    self_weight: float = 1.0,
+) -> GeneFeatures:
+    """`GeneFeatures` over `subset` (default: every gene) from a STRING adjacency.
+
+    Restricting to a subset matters at this scale: the full profile matrix is
+    18,533 x 18,533 floats, 1.4 GB dense, while a prediction only ever needs
+    the rows for the targets being predicted and the targets in the library --
+    a few hundred, and 30 MB.
+    """
+    genes = np.asarray(genes, dtype=object)
+    pos = {g: i for i, g in enumerate(np.asarray(genes, dtype=str))}
+    names = [str(g) for g in (subset if subset is not None else genes)]
+    idx = np.array([pos[n] for n in names if n in pos])
+    kept = [n for n in names if n in pos]
+    if idx.size == 0:
+        raise ValueError("none of the requested genes are in the network's gene space")
+
+    rows = np.asarray(adj[idx].todense(), dtype=np.float32)
+    if self_weight:
+        rows[np.arange(idx.size), idx] = self_weight
+    norms = np.linalg.norm(rows, axis=1, keepdims=True)
+    norms[norms == 0] = 1.0
+    logger.info(
+        "STRING features: %d genes, %d with at least one edge",
+        len(kept),
+        int((rows.sum(axis=1) > self_weight).sum()),
+    )
+    return GeneFeatures(genes=np.asarray(kept, dtype=object), matrix=rows / norms)

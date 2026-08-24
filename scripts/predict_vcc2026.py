@@ -22,6 +22,7 @@ import scipy.sparse as sp
 
 from vcc2026.challenge import Bundle
 from vcc2026.coexpression import ControlOnlyConfig, ControlOnlyPredictor
+from vcc2026.model import ModelConfig
 from vcc2026.submission import SubmissionConfig, build_submission
 
 logger = logging.getLogger("predict")
@@ -36,10 +37,28 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--vcc", default=None, help="also package the result as a .vcc for upload")
     p.add_argument("--library", default=None, help="SignatureLibrary .npz for the transfer model")
     p.add_argument("--embeddings", default=None)
+    p.add_argument(
+        "--string-adj",
+        default=None,
+        help="STRING adjacency .npz: the gene similarity used for unseen targets",
+    )
+    p.add_argument(
+        "--trans-similarity-floor",
+        type=float,
+        default=0.0,
+        help="below this best-neighbour similarity, predict no trans effect at all",
+    )
     p.add_argument("--knockdown-residual", type=float, default=ControlOnlyConfig.knockdown_residual)
     p.add_argument("--trans-beta", type=float, default=ControlOnlyConfig.trans_beta)
-    p.add_argument("--n-components", type=int, default=ControlOnlyConfig.n_components)
+    p.add_argument(
+        "--n-components",
+        type=int,
+        default=None,
+        help="control-only: PCA components; transfer: response programmes",
+    )
     p.add_argument("--alpha", type=float, default=1.0, help="transfer model: global effect scale")
+    p.add_argument("--n-neighbours", type=int, default=ModelConfig.n_neighbours)
+    p.add_argument("--magnitude-gamma", type=float, default=ModelConfig.magnitude_gamma)
     p.add_argument("--pseudocount", type=float, default=SubmissionConfig.pseudocount)
     p.add_argument(
         "--non-responder-fraction", type=float, default=SubmissionConfig.non_responder_fraction
@@ -80,13 +99,34 @@ def main() -> None:
     if args.library:
         from vcc2026.features import load_embeddings
         from vcc2026.library import SignatureLibrary
-        from vcc2026.model import ContextTransferModel, ModelConfig
+        from vcc2026.model import ContextTransferModel
 
         library = SignatureLibrary.load(args.library)
         embeddings = load_embeddings(args.embeddings) if args.embeddings else None
-        model = ContextTransferModel(ModelConfig(alpha=args.alpha, seed=args.seed)).fit(
-            library, embeddings=embeddings
-        )
+
+        features = None
+        if args.string_adj:
+            import scipy.sparse as sp_
+
+            from vcc2026.network import string_features
+
+            adj = sp_.load_npz(args.string_adj)
+            # Only the rows actually queried are needed: the targets being
+            # predicted and the targets the library can transfer from. The full
+            # profile matrix would be 1.4 GB dense for no benefit.
+            needed = sorted(set(map(str, bundle.perturbations)) | set(library.targets()))
+            features = string_features(adj, bundle.genes, subset=needed)
+
+        model = ContextTransferModel(
+            ModelConfig(
+                alpha=args.alpha,
+                n_components=args.n_components or ModelConfig.n_components,
+                n_neighbours=args.n_neighbours,
+                magnitude_gamma=args.magnitude_gamma,
+                trans_similarity_floor=args.trans_similarity_floor,
+                seed=args.seed,
+            )
+        ).fit(library, embeddings=embeddings, features=features)
 
         def predictor_for(context: str, counts: sp.csr_matrix, genes: np.ndarray):
             return _TransferAdapter(model, context, counts, genes)
@@ -102,7 +142,7 @@ def main() -> None:
             cfg = ControlOnlyConfig(
                 knockdown_residual=args.knockdown_residual,
                 trans_beta=args.trans_beta,
-                n_components=args.n_components,
+                n_components=args.n_components or ControlOnlyConfig.n_components,
                 seed=args.seed,
             )
             return ControlOnlyPredictor(cfg).fit(counts, genes)
@@ -154,11 +194,24 @@ class _TransferAdapter:
         pred = self._model.predict(targets, self._ctx)
         mu = self._ctx.mu
         # normlog delta -> natural-log fold change on the linear scale, which is
-        # the space the counts sampler multiplies in.
+        # the space the counts sampler multiplies in. The half-count pseudo-count
+        # is deliberate: below about one count at this depth a fold change is not
+        # identifiable, and shrinking it there is the right behaviour.
         e0 = np.expm1(np.clip(mu, 0.0, None))
         e1 = np.expm1(np.clip(mu[None, :] + pred.delta, 0.0, None))
         eps = 0.5
-        return np.log((e1 + eps) / (e0 + eps)).astype(np.float32)
+        lfc = np.log((e1 + eps) / (e0 + eps)).astype(np.float32)
+
+        # ... except on the target gene itself, where the knockdown is the one
+        # thing we are sure of. Routing it through the same shrinkage would
+        # quietly halve every knockdown the model claims to make -- the same
+        # failure the counts pseudo-count caused (docs/05 §3).
+        residual = self._model.knockdown
+        for i, target in enumerate(targets):
+            j = self._ctx.gene_index(target)
+            if j is not None and mu[j] > 0.02:
+                lfc[i, j] = float(np.log(max(residual.residual_fraction(target), 1e-6)))
+        return lfc
 
 
 if __name__ == "__main__":

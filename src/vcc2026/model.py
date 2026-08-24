@@ -56,6 +56,7 @@ class ModelConfig:
     shrink_prior_cells: float = 30.0
     fc_clip: float = 8.0
     # blending / calibration
+    trans_similarity_floor: float = 0.0
     confidence_prior: float = 0.25
     magnitude_gamma: float = 0.5
     fallback_scale: float = 0.35
@@ -83,6 +84,7 @@ class ContextTransferModel:
         self.library: SignatureLibrary | None = None
         self.knockdown: KnockdownModel | None = None
         self.embeddings: dict[str, np.ndarray] | None = None
+        self.features: GeneFeatures | None = None
         self._library_targets: list[str] = []
 
     # -- training --------------------------------------------------------
@@ -90,6 +92,7 @@ class ContextTransferModel:
         self,
         library: SignatureLibrary,
         embeddings: dict[str, np.ndarray] | None = None,
+        features: GeneFeatures | None = None,
     ) -> ContextTransferModel:
         """Training is cheap: the library *is* most of the model.
 
@@ -101,6 +104,11 @@ class ContextTransferModel:
         self.library = library
         self.knockdown = KnockdownModel.fit(library)
         self.embeddings = embeddings
+        # An explicit feature space overrides the context-derived one entirely.
+        # Co-expression computed from control cells was measured to carry no
+        # signal about which knockdowns resemble which (docs/05), so in practice
+        # this is how a usable gene representation gets in.
+        self.features = features
         counts: dict[str, float] = {}
         for line in library.lines:
             for t in library.deltas[line]:
@@ -159,6 +167,8 @@ class ContextTransferModel:
         return targets, acc, wsum
 
     def _feature_space(self, ctx: CellContext) -> GeneFeatures:
+        if self.features is not None:
+            return self.features
         cfg = self.config
         blocks: list[tuple[GeneFeatures, float]] = []
         if cfg.coexpr_weight > 0:
@@ -203,6 +213,14 @@ class ContextTransferModel:
             if g in row_of:  # never let a target vote for itself
                 sim[row_of[g]] = -np.inf
             nw = neighbour_weights(sim, k=cfg.n_neighbours, power=cfg.neighbour_power)
+            if cfg.trans_similarity_floor > 0 and np.nanmax(sim) < cfg.trans_similarity_floor:
+                # No neighbour close enough to learn from. The context mean is
+                # the honest answer here: it scores exactly 0, where a guess
+                # assembled from unrelated signatures scores below it.
+                out[i] = self.knockdown.apply(ctx, g, np.zeros(ctx.genes.size))
+                conf[i] = 0.0
+                observed[i] = g in wsum_of and wsum_of[g] > 0
+                continue
             if nw.sum() <= 0:
                 # No feature signal at all -- typically a gene with zero variance
                 # across this line's control cells.  Predicting a flat zero would
