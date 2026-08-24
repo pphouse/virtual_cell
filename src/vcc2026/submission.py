@@ -46,7 +46,8 @@ class LfcPredictor(Protocol):
 
 @dataclass
 class SubmissionConfig:
-    pseudocount: float = 1.0  # calibrated against the real controls; see counts.py
+    pseudocount: float = 1.0
+    min_abs_lfc: float = 0.05  # below this, claim nothing and pass the gene through
     non_responder_fraction: float = 0.0
     response_shape: float = float("inf")  # inf = every cell gets the full effect
     max_counts_per_cell: int = 1_000_000
@@ -126,12 +127,22 @@ def build_submission(
                 raise ValueError(
                     f"predictor returned {lfc.shape}, expected {(len(targets), bundle.genes.size)}"
                 )
+            if cfg.min_abs_lfc > 0:
+                # Anything smaller is a claim the model cannot support, and
+                # claiming it is not free: every gene with a non-zero fold change
+                # gets redrawn, and a haze of tiny redrawn effects across 18,533
+                # genes is exactly the artefact that cost the first submission
+                # 0.34 on DE direction fidelity (docs/05).
+                lfc = np.where(np.abs(lfc) < cfg.min_abs_lfc, 0.0, lfc).astype(np.float32)
+            per_target = (np.abs(lfc) > 0).sum(axis=1)
             logger.info(
-                "context %s: %d targets, %d with a non-zero prediction, median |lfc| %.3f",
+                "context %s: %d targets, %d with a non-zero prediction, "
+                "median |lfc| %.3f, median genes moved %d",
                 context,
                 len(targets),
                 int((np.abs(lfc).max(axis=1) > 0).sum()),
                 float(np.median(np.abs(lfc).max(axis=1))),
+                int(np.median(per_target)),
             )
 
             rng = np.random.default_rng(abs(hash((cfg.seed, context))) % (2**32))

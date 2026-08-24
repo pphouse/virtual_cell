@@ -61,6 +61,12 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--magnitude-gamma", type=float, default=ModelConfig.magnitude_gamma)
     p.add_argument("--pseudocount", type=float, default=SubmissionConfig.pseudocount)
     p.add_argument(
+        "--min-abs-lfc",
+        type=float,
+        default=SubmissionConfig.min_abs_lfc,
+        help="predicted |log fold change| below this is treated as no claim",
+    )
+    p.add_argument(
         "--non-responder-fraction", type=float, default=SubmissionConfig.non_responder_fraction
     )
     p.add_argument(
@@ -153,6 +159,7 @@ def main() -> None:
         args.out,
         SubmissionConfig(
             pseudocount=args.pseudocount,
+            min_abs_lfc=args.min_abs_lfc,
             non_responder_fraction=args.non_responder_fraction,
             response_shape=args.response_shape,
             seed=args.seed,
@@ -168,6 +175,8 @@ def main() -> None:
         "trans_beta": args.trans_beta,
         "alpha": args.alpha,
         "pseudocount": args.pseudocount,
+        "min_abs_lfc": args.min_abs_lfc,
+        "trans_similarity_floor": args.trans_similarity_floor,
         "seed": args.seed,
     }
     Path(str(out) + ".json").write_text(json.dumps(meta, indent=2))
