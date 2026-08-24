@@ -71,6 +71,7 @@ def pds_cosine(pred: np.ndarray, truth: np.ndarray) -> float:
 def de_metrics(pred: np.ndarray, truth: np.ndarray, top_n: int = 200, moved: float = 0.05) -> dict:
     n = pred.shape[0]
     fid, jac, nmae = np.zeros(n), np.zeros(n), np.zeros(n)
+    agree_only, yield_only = np.zeros(n), np.zeros(n)
     for i in range(n):
         real_top = np.argpartition(-np.abs(truth[i]), top_n - 1)[:top_n]
         called = np.flatnonzero(np.abs(pred[i]) > moved)
@@ -84,6 +85,10 @@ def de_metrics(pred: np.ndarray, truth: np.ndarray, top_n: int = 200, moved: flo
         # (a prediction covering ~1 gene scored 0.002 against a 0.511 baseline).
         yield_ = hit.size / top_n
         fid[i] = agree * min(yield_ / 0.5, 1.0)
+        # Reported separately because the product hides which half is failing:
+        # a right-but-silent prediction and a loud-but-wrong one both score low.
+        agree_only[i] = agree if hit.size else np.nan
+        yield_only[i] = yield_
 
         pred_top = (
             np.argpartition(-np.abs(pred[i]), min(top_n, called.size) - 1)[:top_n]
@@ -96,7 +101,13 @@ def de_metrics(pred: np.ndarray, truth: np.ndarray, top_n: int = 200, moved: flo
         err = np.abs(pred[i][real_top] - truth[i][real_top]).mean()
         null = np.abs(truth[i][real_top]).mean()
         nmae[i] = err / null if null > 0 else 1.0
-    return {"fid": float(fid.mean()), "jac": float(jac.mean()), "nmae": float(nmae.mean())}
+    return {
+        "fid": float(fid.mean()),
+        "jac": float(jac.mean()),
+        "nmae": float(nmae.mean()),
+        "direction_agreement": float(np.nanmean(agree_only)),
+        "de_yield": float(yield_only.mean()),
+    }
 
 
 def evaluate(lib: SignatureLibrary, held_out: str, config: ModelConfig, features) -> dict:

@@ -206,9 +206,13 @@ def add_source_streaming(
 
     path = Path(path)
     with h5py.File(path, "r") as f:
-        if f["X"].attrs.get("encoding-type") != "csr_matrix":
-            raise ValueError(f"{path.name}: only CSR .h5ad is supported here")
-        n_cells, n_src_genes = (int(v) for v in f["X"].attrs["shape"])
+        encoding = f["X"].attrs.get("encoding-type")
+        dense = isinstance(f["X"], h5py.Dataset)
+        if not dense and encoding != "csr_matrix":
+            raise ValueError(f"{path.name}: unsupported X encoding {encoding!r}")
+        n_cells, n_src_genes = (
+            (int(v) for v in f["X"].shape) if dense else (int(v) for v in f["X"].attrs["shape"])
+        )
         src_genes = _read_string_index(f["var"])
         labels = _read_categorical(f["obs"], pert_col)
         if labels is None:
@@ -220,14 +224,20 @@ def add_source_streaming(
         col_of = np.full(n_src_genes, -1, dtype=np.int64)
         col_of[keep] = [lib._gene_index[g] for g in src_genes[keep]]
 
-        data, indices, indptr = f["X/data"], f["X/indices"], f["X/indptr"]
-        ptr = indptr[:]
+        if dense:
+            data = indices = None
+            ptr = None
+            probe = f["X"][: min(n_cells, 2000)]
+            totals = probe.sum(axis=1)
+        else:
+            data, indices, indptr = f["X/data"], f["X/indices"], f["X/indptr"]
+            ptr = indptr[:]
+            step = max(min(n_cells, 20000) // 2000, 1)
+            totals = np.array(
+                [data[ptr[i] : ptr[i + 1]].sum() for i in range(0, min(n_cells, 20000), step)]
+            )
 
         if target_sum is None:
-            probe = min(n_cells, 20000)
-            totals = np.array(
-                [data[ptr[i] : ptr[i + 1]].sum() for i in range(0, probe, max(probe // 2000, 1))]
-            )
             target_sum = float(np.median(totals[totals > 0])) if totals.size else 1e4
         lib.target_sum[line] = float(target_sum)
         logger.info(
@@ -244,21 +254,35 @@ def add_source_streaming(
         acc = np.zeros((uniq.size, lib.genes.size), dtype=np.float64)
         counts = np.zeros(uniq.size, dtype=np.int64)
 
+        keep_cols = np.flatnonzero(col_of >= 0)
+        dest_cols = col_of[keep_cols]
+
         for start in range(0, n_cells, block):
             stop = min(start + block, n_cells)
-            lo, hi = int(ptr[start]), int(ptr[stop])
-            d = data[lo:hi].astype(np.float64)
-            idx = indices[lo:hi]
-            rows = np.repeat(np.arange(stop - start), np.diff(ptr[start : stop + 1]))
-
-            totals = np.zeros(stop - start)
-            np.add.at(totals, rows, d)
-            totals[totals == 0] = 1.0
-            d = np.log1p(d * (target_sum / totals[rows]))
-
-            good = col_of[idx] >= 0
             groups = np.array([row_of[t] for t in labels[start:stop]])
-            np.add.at(acc, (groups[rows[good]], col_of[idx[good]]), d[good])
+
+            if dense:
+                # Dense and gzip-compressed (the scPerturb releases): one row
+                # block at a time, restricted to the shared genes.
+                chunk = np.asarray(f["X"][start:stop], dtype=np.float64)
+                totals = chunk.sum(axis=1)
+                totals[totals == 0] = 1.0
+                normed = np.log1p(chunk[:, keep_cols] * (target_sum / totals)[:, None])
+                for g in np.unique(groups):
+                    sel = groups == g
+                    acc[g, dest_cols] += normed[sel].sum(axis=0)
+            else:
+                lo, hi = int(ptr[start]), int(ptr[stop])
+                d = data[lo:hi].astype(np.float64)
+                idx = indices[lo:hi]
+                rows = np.repeat(np.arange(stop - start), np.diff(ptr[start : stop + 1]))
+                totals = np.zeros(stop - start)
+                np.add.at(totals, rows, d)
+                totals[totals == 0] = 1.0
+                d = np.log1p(d * (target_sum / totals[rows]))
+                good = col_of[idx] >= 0
+                np.add.at(acc, (groups[rows[good]], col_of[idx[good]]), d[good])
+
             np.add.at(counts, groups, 1)
             if (start // block) % 10 == 0:
                 logger.info("  %s: %d/%d cells", line, stop, n_cells)

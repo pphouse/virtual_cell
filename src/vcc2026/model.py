@@ -57,6 +57,7 @@ class ModelConfig:
     fc_clip: float = 8.0
     # blending / calibration
     trans_similarity_floor: float = 0.0
+    coverage_aware_knn: bool = True
     confidence_prior: float = 0.25
     magnitude_gamma: float = 0.5
     shared_shrink: float = 0.0
@@ -126,7 +127,16 @@ class ContextTransferModel:
 
     # -- per-context assembly -------------------------------------------
     def _consensus(self, ctx: CellContext) -> tuple[list[str], np.ndarray, np.ndarray]:
-        """Rebase every library signature into `ctx` and pool across source lines."""
+        """Rebase every library signature into `ctx` and pool across source lines.
+
+        Pooling is per *gene*, not per signature, because sources do not measure
+        the same genes.  The public Replogle releases carry 7,938 of this panel's
+        18,533; averaging them against a source that carries 18,077 as though the
+        missing 10,600 had been measured as zero drags every prediction toward
+        zero exactly there.  Measured: adding 2,057 K562 signatures that way cost
+        more than they brought, taking the offline DE-set overlap from 0.147 to
+        0.035.  A gene is averaged only over the sources that saw it.
+        """
         assert self.library is not None
         cfg = self.config
         lib = self.library
@@ -139,6 +149,7 @@ class ContextTransferModel:
         pos_of = {t: i for i, t in enumerate(targets)}
 
         acc = np.zeros((len(targets), ctx.genes.size))
+        wsum_gene = np.zeros((len(targets), ctx.genes.size), dtype=np.float32)
         wsum = np.zeros(len(targets))
 
         for line, lw in weights.items():
@@ -161,11 +172,15 @@ class ContextTransferModel:
             )
             rows = np.array([pos_of[t] for t in present])
             acc[rows] += rebased * w[:, None]
+            measured = np.zeros(ctx.genes.size, dtype=bool)
+            measured[known] = lib.baseline[line][gene_pos[known]] != 0
+            wsum_gene[np.ix_(rows, np.flatnonzero(measured))] += w[:, None].astype(np.float32)
             wsum[rows] += w
 
-        nz = wsum > 0
-        acc[nz] /= wsum[nz][:, None]
-        return targets, acc, wsum
+        nz = wsum_gene > 0
+        acc[nz] /= wsum_gene[nz]
+        acc[~nz] = 0.0
+        return targets, acc, wsum, nz
 
     def _feature_space(self, ctx: CellContext) -> GeneFeatures:
         if self.features is not None:
@@ -184,7 +199,7 @@ class ContextTransferModel:
             raise RuntimeError("call fit() before predict()")
         cfg = self.config
 
-        lib_targets, consensus, wsum = self._consensus(ctx)
+        lib_targets, consensus, wsum, covered = self._consensus(ctx)
         usable = wsum > 0
         if usable.sum() < 2:
             raise RuntimeError(
@@ -198,6 +213,7 @@ class ContextTransferModel:
         )
         features = self._feature_space(ctx)
         train_targets = basis.targets
+        usable_rows = np.flatnonzero(usable)
         train_mag = np.linalg.norm(consensus[usable], axis=1)
         row_of = {t: i for i, t in enumerate(train_targets)}
         wsum_of = dict(zip(lib_targets, wsum, strict=False))
@@ -230,7 +246,15 @@ class ContextTransferModel:
                 # better guess and is flagged so it can be audited.
                 nw = np.ones(len(train_targets))
                 fallback[i] = True
-            d_knn = basis.reconstruct(basis.predict_loadings(nw))
+            if cfg.coverage_aware_knn:
+                # Average each gene only over the neighbours that measured it.
+                # Averaging in the basis' loading space instead treats a gene a
+                # source never measured as a measured zero, which drags the
+                # prediction toward zero exactly where coverage is thin -- the
+                # public Replogle releases carry 7,938 of this panel's 18,533.
+                d_knn = _covered_average(consensus, covered, nw, usable_rows)
+            else:
+                d_knn = basis.reconstruct(basis.predict_loadings(nw))
             if fallback[i]:
                 d_knn = d_knn * cfg.fallback_scale
 
@@ -315,3 +339,21 @@ class ContextTransferModel:
         if want <= 0:
             return delta
         return delta * (want / cur) ** gamma
+
+
+def _covered_average(
+    consensus: np.ndarray,
+    covered: np.ndarray,
+    weights: np.ndarray,
+    rows: np.ndarray,
+) -> np.ndarray:
+    """Weighted mean over neighbours, per gene, skipping sources that never saw it."""
+    idx = np.flatnonzero(weights)
+    if idx.size == 0:
+        return np.zeros(consensus.shape[1])
+    src = rows[idx]
+    w = weights[idx][:, None]
+    mask = covered[src]
+    num = (consensus[src] * w * mask).sum(axis=0)
+    den = (w * mask).sum(axis=0)
+    return np.divide(num, den, out=np.zeros_like(num), where=den > 0)
