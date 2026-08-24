@@ -58,6 +58,7 @@ class ModelConfig:
     # blending / calibration
     trans_similarity_floor: float = 0.0
     coverage_aware_knn: bool = True
+    knockdown_lines: tuple[str, ...] | None = None  # estimate efficiency only from these
     confidence_prior: float = 0.25
     magnitude_gamma: float = 0.5
     shared_shrink: float = 0.0
@@ -104,7 +105,7 @@ class ContextTransferModel:
         depend on the target line's baseline, which we only see then.
         """
         self.library = library
-        self.knockdown = KnockdownModel.fit(library)
+        self.knockdown = KnockdownModel.fit(library, lines=self.config.knockdown_lines)
         self.embeddings = embeddings
         # An explicit feature space overrides the context-derived one entirely.
         # Co-expression computed from control cells was measured to carry no

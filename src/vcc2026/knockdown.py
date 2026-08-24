@@ -38,10 +38,22 @@ class KnockdownModel:
         lib: SignatureLibrary,
         default: float = DEFAULT_KNOCKDOWN,
         min_baseline: float = 0.1,
+        lines: tuple[str, ...] | None = None,
     ) -> KnockdownModel:
-        """Median observed on-target fold change per gene across source lines."""
+        """Median observed on-target fold change per gene, over `lines`.
+
+        Restricting the estimate matters, because knockdown efficiency is a
+        property of the reagent rather than of the biology, and it does not
+        transfer between protocols the way a trans signature does.  Measured on
+        this library: Arc's own CRISPRi leaves a median 0.13-0.16 of the target
+        gene across all three 2025 batches, while the public Replogle screens
+        leave 0.54-0.58 -- different guides, different construct, different
+        timepoint.  Pooling them lets the numerically larger source decide, and
+        a library dominated by Replogle halves the knockdown the 2026 challenge
+        will actually see.
+        """
         obs: dict[str, list[float]] = {}
-        for line in lib.lines:
+        for line in lines if lines is not None else lib.lines:
             mu = lib.baseline[line]
             for target, delta in lib.deltas[line].items():
                 j = lib.gene_index(target)

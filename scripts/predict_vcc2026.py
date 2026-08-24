@@ -61,6 +61,13 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--magnitude-gamma", type=float, default=ModelConfig.magnitude_gamma)
     p.add_argument("--neighbour-power", type=float, default=ModelConfig.neighbour_power)
     p.add_argument("--shared-shrink", type=float, default=ModelConfig.shared_shrink)
+    p.add_argument(
+        "--knockdown-lines",
+        default=None,
+        help="comma-separated source lines to estimate knockdown efficiency from; "
+        "it is a property of the reagent, not the biology, so it does not "
+        "transfer across protocols the way a trans signature does",
+    )
     p.add_argument("--pseudocount", type=float, default=SubmissionConfig.pseudocount)
     p.add_argument(
         "--min-abs-lfc",
@@ -133,6 +140,11 @@ def main() -> None:
                 magnitude_gamma=args.magnitude_gamma,
                 neighbour_power=args.neighbour_power,
                 shared_shrink=args.shared_shrink,
+                knockdown_lines=(
+                    tuple(x.strip() for x in args.knockdown_lines.split(","))
+                    if args.knockdown_lines
+                    else None
+                ),
                 trans_similarity_floor=args.trans_similarity_floor,
                 seed=args.seed,
             )
