@@ -59,6 +59,7 @@ class ModelConfig:
     trans_similarity_floor: float = 0.0
     confidence_prior: float = 0.25
     magnitude_gamma: float = 0.5
+    shared_shrink: float = 0.0
     fallback_scale: float = 0.35
     alpha: float = 1.0
     min_target_baseline: float = 0.05
@@ -246,6 +247,18 @@ class ContextTransferModel:
             d = self._scale_magnitude(d, g, nw, train_mag, ctx)
             d = self.knockdown.apply(ctx, g, d)
             out[i] = cfg.alpha * d
+
+        if cfg.shared_shrink > 0 and len(targets) > 2:
+            # Averaging neighbouring signatures pulls every prediction toward
+            # the programme they share, so predictions end up far more alike
+            # than real signatures are (measured on context A: median pairwise
+            # cosine 0.29 against 0.015 for the measured H1 signatures). The
+            # discrimination metric ranks a predicted effect against every real
+            # effect, so that shared mass is what makes perturbations
+            # indistinguishable. Subtracting part of it trades DE agreement,
+            # which the shared programme genuinely carries, for specificity.
+            shared = out.mean(axis=0, keepdims=True)
+            out = out - cfg.shared_shrink * shared
 
         return Prediction(
             targets=list(targets),

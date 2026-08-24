@@ -59,6 +59,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--alpha", type=float, default=1.0, help="transfer model: global effect scale")
     p.add_argument("--n-neighbours", type=int, default=ModelConfig.n_neighbours)
     p.add_argument("--magnitude-gamma", type=float, default=ModelConfig.magnitude_gamma)
+    p.add_argument("--neighbour-power", type=float, default=ModelConfig.neighbour_power)
+    p.add_argument("--shared-shrink", type=float, default=ModelConfig.shared_shrink)
     p.add_argument("--pseudocount", type=float, default=SubmissionConfig.pseudocount)
     p.add_argument(
         "--min-abs-lfc",
@@ -129,6 +131,8 @@ def main() -> None:
                 n_components=args.n_components or ModelConfig.n_components,
                 n_neighbours=args.n_neighbours,
                 magnitude_gamma=args.magnitude_gamma,
+                neighbour_power=args.neighbour_power,
+                shared_shrink=args.shared_shrink,
                 trans_similarity_floor=args.trans_similarity_floor,
                 seed=args.seed,
             )

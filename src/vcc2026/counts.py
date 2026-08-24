@@ -27,9 +27,10 @@ about 0.51 -- below chance -- and cost -0.34 on that metric.
 
 So the emission only touches genes the model actually predicts a change for:
 
-    fc = exp(lfc)
-    active genes:  lam = counts_i * fc + a * L_i * m * max(fc - 1, 0)
-    draw ~ Poisson(lam)
+    fc  = exp(lfc)
+    w   = w0 * clip(1 - 1/fc, 0, 1)                 # 0 when fc <= 1
+    lam = fc * ((1 - w) * counts_i + w * L_i * m)
+    active genes:  stochastic_round(lam)
     every other gene passes through from the real control cell, untouched
 
 With no prediction there is nothing to touch and the output *is* the input, so
@@ -40,16 +41,32 @@ The pieces of the active-gene formula each still do a job:
 
 * ``counts_i`` is the real cell's own count for that gene, so the spread across
   cells stays real;
-* ``a * L_i * m * (fc - 1)+`` is a pseudo-count toward the context mean,
-  written as a fraction of the cell's library size.  Without it a gene reading
-  zero in this particular cell could never be *up*-regulated -- multiplying zero
-  by a fold change leaves zero -- and the up half of every signature would
-  vanish.  It applies to *up*-regulation only, and that asymmetry is not a
-  detail: added on both sides it inflates the pre-multiplication mass, so an
-  intended knockdown to 0.148 of baseline is delivered at 0.30 instead.  The
-  first submission shipped with exactly that bug, halving every knockdown it
-  claimed to make;
-* the Poisson draw supplies the shot noise a real measurement has.
+* ``w`` *mixes* the cell toward the context's population rate instead of
+  adding to it.  A gene reading zero in this particular cell can never be
+  *up*-regulated by multiplication alone, so some mass has to come from
+  somewhere -- but it must come out of the cell's own share, not on top of it.
+  Written as an addition (the previous two versions of this file) it delivers
+  the wrong mean in whichever direction it is applied: added on both sides it
+  diluted knockdowns, so an intended residual of 0.148 arrived at 0.30; applied
+  to up-regulation only it over-delivered instead, and the emitted populations
+  came out 81-86% up on their significant genes where the measured H1
+  signatures are 52%.  Written as a mix, ``E[lam] = fc * L_i * m`` for every
+  ``w``, so the requested fold change is delivered in both directions and ``w``
+  only decides how much of it reaches cells that read zero.  ``w`` vanishes at
+  ``fc = 1``, which is what keeps the null exact;
+* the existing count is *transformed*, not re-measured.  A Poisson redraw of
+  ``counts_i * fc`` looks natural and is not: the control cell is already one
+  noisy measurement, and drawing again adds a second round.  That second round
+  is not symmetric -- resampling a sparse count vector turns 1s into 0s about
+  37% of the time -- so it shifts genes down in exactly the rank sense the
+  scorer's Wilcoxon test reads.  Measured on the real context A controls,
+  redrawing all 18,533 genes with a negligible fold change produces 5,815
+  spurious significant genes, 99.8% of them called DOWN; even 1,500 redrawn
+  genes produce 203.  Stochastic rounding instead preserves the mean exactly and
+  adds only the variance integrality demands.  Real knockdown responses are
+  mostly down, so this artefact would have *flattered* the direction metrics
+  while generalising to nothing;
+
 
 The library size is deliberately *not* renormalised afterwards.  Knocking down
 one gene removes its mass, and on this panel the target genes carry 0.002-0.02%
@@ -112,12 +129,14 @@ def emit_counts(
         return out
 
     block = np.asarray(base[:, active].todense(), dtype=np.float64)
-    prior = pseudocount * mean_proportions[active][None, :] * library_sizes[:, None]
+    population = mean_proportions[active][None, :] * library_sizes[:, None]
     fc = np.exp(np.clip(lfc[:, active] if lfc.ndim == 2 else lfc[active][None, :], -30.0, 30.0))
-    # The prior only opens the way *up*. Applied symmetrically it would dilute
-    # every knockdown by the mass it adds before the multiplication.
-    lam = block * fc + prior * np.clip(fc - 1.0, 0.0, None)
-    drawn = rng.poisson(np.clip(lam, 0.0, None))
+    # Mix toward the population rate, never add to it, and only on the way up.
+    # The weight vanishes at fc = 1 so an unchanged gene stays untouched.
+    w = pseudocount * np.clip(1.0 - 1.0 / np.maximum(fc, 1e-9), 0.0, 1.0)
+    scaled = np.clip(fc * ((1.0 - w) * block + w * population), 0.0, None)
+    floor = np.floor(scaled)
+    drawn = (floor + (rng.random(scaled.shape) < (scaled - floor))).astype(np.int64)
 
     touched = np.zeros(n_genes, dtype=bool)
     touched[active] = True

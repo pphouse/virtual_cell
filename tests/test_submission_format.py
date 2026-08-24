@@ -233,6 +233,29 @@ def test_the_pseudocount_does_not_dilute_a_knockdown():
         assert delivered == pytest.approx(0.15, rel=0.20), (a, delivered)
 
 
+def test_the_requested_fold_change_is_delivered_in_both_directions():
+    """The invariant three versions of the emission got wrong in three ways.
+
+    The prior that lets a zero-count cell rise must *mix* toward the population
+    rate, not add to it. Added on both sides it diluted knockdowns (0.15 arrived
+    at 0.30); added on the up side only it over-delivered, and the emitted
+    populations came out 81-86% up on their significant genes where the measured
+    signatures are 52%. As a mix the delivered mean is the requested one either
+    way, and the weight only decides how far up-regulation reaches into cells
+    that read zero.
+    """
+    rng = np.random.default_rng(7)
+    base = sp.csr_matrix(rng.poisson(4.0, size=(800, N_GENES)).astype(np.float32))
+    mean_p = context_mean_proportions(base)
+    for gene, want in ((2, 0.2), (4, 0.5), (6, 2.0), (8, 4.0)):
+        lfc = np.zeros(N_GENES)
+        lfc[gene] = np.log(want)
+        for a in (0.0, 1.0, 3.0):
+            out = emit_counts(base, mean_p, lfc, pseudocount=a, rng=np.random.default_rng(8))
+            got = out[:, gene].sum() / base[:, gene].sum()
+            assert got == pytest.approx(want, rel=0.15), (gene, want, a, got)
+
+
 def test_the_pseudocount_enables_upregulation_of_a_silent_gene():
     rng = np.random.default_rng(3)
     base = sp.csr_matrix(rng.poisson(3.0, size=(400, N_GENES)).astype(np.float32))
