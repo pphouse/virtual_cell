@@ -1,18 +1,26 @@
+"""The Context-Conditioned Delta Transfer model, on a multi-cell-line simulator.
+
+These exercise the *transfer* half of the system -- rebasing a measured
+signature into an unseen context, extrapolating to targets nobody perturbed,
+and holding out a whole cell line to score it.  The submission format is tested
+separately in `test_submission_format.py`, against the real 2026 rules.
+
+The simulator is not challenge data.  A number here is evidence the wiring is
+right, never a prediction of leaderboard performance.
+"""
+
 import numpy as np
 import pytest
 
-from vcc import (
+from vcc2026 import (
     CellContext,
-    CellSampler,
     ContextTransferModel,
     ModelConfig,
-    SamplerConfig,
     build_signature_library,
 )
-from vcc.calibrate import evaluate_holdout, sweep
-from vcc.localeval import baseline_pair, evaluate, score_against_baseline
-from vcc.normalize import normlog
-from vcc.submit import validate
+from vcc2026.calibrate import evaluate_holdout, sweep
+from vcc2026.localeval import baseline_pair, evaluate, score_against_baseline
+from vcc2026.normalize import normlog
 
 from .synthetic import SimConfig, simulate
 
@@ -86,77 +94,6 @@ def test_unseen_targets_still_predicted(sim):
     assert expressed >= 10
 
 
-def test_sampler_preserves_pseudobulk_mean_exactly(sim):
-    """Heterogeneity must be free: the emitted pseudobulk delta is the predicted one.
-
-    Verified on a degenerate context whose control cells are all identical, so
-    the only thing that can move the mean is the response-scale draw.
-    """
-    _, _, _, lib, ctx = sim
-    model = ContextTransferModel(ModelConfig()).fit(lib)
-    targets = lib.targets("line0")[:8]
-    pred = model.predict(targets, ctx)
-
-    flat = CellContext(
-        name=ctx.name,
-        genes=ctx.genes,
-        control=np.repeat(ctx.mu[None, :], 400, axis=0),
-    )
-    for hetero in [(0.0, 8.0), (0.3, 2.0), (0.6, 1.0)]:
-        cfg = SamplerConfig(non_responder_fraction=hetero[0], response_shape=hetero[1])
-        adata = CellSampler(cfg).sample(flat, pred, {t: 150 for t in targets})
-        x = adata.X.toarray()
-        labels = adata.obs["target_gene"].astype(str).to_numpy()
-        base = x[labels == "non-targeting"].mean(axis=0)
-        assert np.abs(base - np.clip(flat.mu, 0, None)).max() < 1e-3
-        for i, t in enumerate(targets):
-            emitted = x[labels == t].mean(axis=0) - base
-            assert np.abs(emitted - pred.delta[i]).max() < 1e-3, hetero
-
-
-def test_sampler_anchors_means_on_the_full_control_pool(sim):
-    """Resampling noise must not reach the pseudobulk means the metrics read."""
-    _, _, _, lib, ctx = sim
-    model = ContextTransferModel(ModelConfig()).fit(lib)
-    targets = lib.targets("line0")[:5]
-    pred = model.predict(targets, ctx)
-    adata = CellSampler(SamplerConfig()).sample(ctx, pred, {t: 40 for t in targets})
-    x = adata.X.toarray()
-    labels = adata.obs["target_gene"].astype(str).to_numpy()
-    ctrl = x[labels == "non-targeting"].mean(axis=0)
-    assert np.abs(ctrl - np.clip(ctx.mu, 0, None)).max() < 1e-3
-    for i, t in enumerate(targets):
-        want = np.clip(ctx.mu + pred.delta[i], 0, None)
-        assert np.abs(x[labels == t].mean(axis=0) - want).max() < 1e-3
-
-
-def test_sampler_matches_requested_cell_counts(sim):
-    _, _, _, lib, ctx = sim
-    model = ContextTransferModel(ModelConfig()).fit(lib)
-    targets = lib.targets("line0")[:6]
-    pred = model.predict(targets, ctx)
-    want = {t: 10 + 7 * i for i, t in enumerate(targets)}
-    adata = CellSampler(SamplerConfig()).sample(ctx, pred, want)
-    counts = adata.obs["target_gene"].astype(str).value_counts().to_dict()
-    for t, n in want.items():
-        assert counts[t] == n
-    assert counts["non-targeting"] > 0
-
-
-def test_sampler_heterogeneity_is_real(sim):
-    _, _, _, lib, ctx = sim
-    model = ContextTransferModel(ModelConfig()).fit(lib)
-    targets = lib.targets("line0")[:3]
-    pred = model.predict(targets, ctx)
-    scales = CellSampler(SamplerConfig(non_responder_fraction=0.2)).response_scales(
-        5000, np.random.default_rng(0)
-    )
-    assert abs(scales.mean() - 1.0) < 1e-9  # mean is exact by construction
-    assert (scales == 0).mean() > 0.1  # non-responders present
-    assert scales.std() > 0.3
-    assert pred.delta.shape == (3, ctx.genes.size)
-
-
 def test_alpha_sweep_runs_and_moves_the_score(sim):
     _, _, _, lib, ctx = sim
     rows = sweep(lib, HELD_OUT, ctx, "alpha", [0.25, 0.75, 1.25], config=ModelConfig())
@@ -165,26 +102,21 @@ def test_alpha_sweep_runs_and_moves_the_score(sim):
     assert max(scores) > min(scores), "alpha should matter"
 
 
-def test_scoring_clips_losses_at_zero():
-    user = {"mae": 2.0, "pearson_delta": 0.1}
-    base = {"mae": 1.0, "pearson_delta": 0.5}
+def test_a_confidently_wrong_prediction_scores_below_baseline():
+    """2026 has no floor at zero, so losing a metric is a real cost.
+
+    The 2025 scorer clipped every metric at the baseline, which made an
+    aggressive prediction free to be wrong. That is not how the 2026 aggregate
+    works -- only expression accuracy stops at 0 -- so the local proxy must not
+    reproduce the old clip or it will recommend over-confident settings.
+    """
+    user = {"mae": 2.0, "mse": 2.0, "pearson_delta": 0.1}
+    base = {"mae": 1.0, "mse": 1.0, "pearson_delta": 0.5}
     s = score_against_baseline(user, base)
-    assert s["mae"] == 0.0 and s["pearson_delta"] == 0.0
-    assert s["avg_score"] == 0.0
-
-
-def test_submission_validation(sim):
-    genes, _, _, lib, ctx = sim
-    model = ContextTransferModel(ModelConfig()).fit(lib)
-    targets = lib.targets("line0")[:5]
-    pred = model.predict(targets, ctx)
-    adata = CellSampler(SamplerConfig()).sample(ctx, pred, {t: 50 for t in targets})
-    validate(adata, genes=genes)
-
-    with pytest.raises(ValueError):
-        validate(adata, genes=np.array(list(genes) + ["EXTRA"]))
-    with pytest.raises(ValueError):
-        validate(adata, genes=genes, max_cells=10)
+    assert s["mse"] == 0.0, "expression accuracy is the one metric with a floor"
+    assert s["mae"] < 0, "everything else can go negative"
+    assert s["pearson_delta"] < 0
+    assert s["avg_score"] < 0
 
 
 def test_normlog_defaults_to_median_library_size():

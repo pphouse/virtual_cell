@@ -21,9 +21,9 @@ from pathlib import Path
 
 import anndata as ad
 import numpy as np
+from vcc2026.submit import read_gene_list
 
-from vcc.library import SignatureLibrary
-from vcc.submit import read_gene_list
+from vcc2026.library import SignatureLibrary
 
 
 def parse_args() -> argparse.Namespace:

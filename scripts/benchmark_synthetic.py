@@ -18,9 +18,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tests"))
 
 from synthetic import SimConfig, simulate  # noqa: E402
 
-from vcc import CellContext, ModelConfig, build_signature_library  # noqa: E402
-from vcc.calibrate import evaluate_holdout  # noqa: E402
-from vcc.localeval import baseline_pair, evaluate  # noqa: E402
+from vcc2026 import CellContext, ModelConfig, build_signature_library  # noqa: E402
+from vcc2026.calibrate import evaluate_holdout  # noqa: E402
+from vcc2026.localeval import baseline_pair, evaluate  # noqa: E402
 
 logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(message)s")
 

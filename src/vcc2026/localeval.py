@@ -8,16 +8,21 @@ and cheaply.  The DE-family metrics cannot -- what is provided is an explicitly
 labelled rank-based proxy, useful for ordering candidate configurations and not
 for reporting a number.
 
-The scoring aggregation mirrors ``cell_eval.score_agg_metrics``: each metric is
-normalised against the "predict the control mean" baseline,
+The scoring aggregation follows the 2026 convention: each metric is expressed
+relative to the "predict the context mean" baseline,
 
     lower-is-better:   1 - user / base
     higher-is-better:  (user - base) / (1 - base)
 
-then clipped at zero and averaged.  That clip is the strategically important
-part of the rules: a metric you lose contributes exactly 0, never a negative,
-so losing it *more* costs nothing while winning a different metric *more* pays
-in full.
+so 0 means "no better than pasting the average cell onto every perturbation".
+
+**There is no floor at zero.**  That was true of the 2025 scorer and is not
+true of the 2026 one: only the expression-accuracy metric stops at 0, and the
+rest bottom out at their own depths (the DE log-FC metric is floored at -6, the
+direction-fidelity metric around -1.9).  A confidently wrong prediction is
+therefore worse than no prediction, and the context mean -- which scores exactly
+0 -- is always available as the honest abstention.  Only `mse`-family metrics
+are clipped here, matching that.
 """
 
 from __future__ import annotations
@@ -27,6 +32,8 @@ from dataclasses import dataclass
 import numpy as np
 
 LOWER_IS_BETTER = {"mae", "mse", "mae_delta", "mse_delta"}
+# The only metric family the real scorer floors at zero (expression accuracy).
+FLOORED_AT_ZERO = {"mse", "mse_delta"}
 
 
 @dataclass
@@ -163,7 +170,8 @@ def score_against_baseline(user: dict[str, float], base: dict[str, float]) -> di
             s = 1.0 - (u / b) if b != 0 else 0.0
         else:
             s = (u - b) / (1.0 - b) if b != 1.0 else 0.0
-        out[name] = float(np.clip(np.nan_to_num(s), 0.0, None))
+        s = float(np.nan_to_num(s))
+        out[name] = max(s, 0.0) if name in FLOORED_AT_ZERO else s
     out["avg_score"] = float(np.mean(list(out.values()))) if out else 0.0
     return out
 

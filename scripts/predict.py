@@ -23,11 +23,11 @@ from pathlib import Path
 
 import anndata as ad
 import numpy as np
+from vcc2026.submit import read_gene_list, read_pert_counts, write_submission
 
-from vcc import CellContext, CellSampler, ContextTransferModel, ModelConfig, SamplerConfig
-from vcc.features import load_embeddings
-from vcc.library import SignatureLibrary
-from vcc.submit import read_gene_list, read_pert_counts, write_submission
+from vcc2026 import CellContext, CellSampler, ContextTransferModel, ModelConfig, SamplerConfig
+from vcc2026.features import load_embeddings
+from vcc2026.library import SignatureLibrary
 
 logger = logging.getLogger("predict")
 
