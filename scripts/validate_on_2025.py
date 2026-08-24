@@ -79,21 +79,36 @@ def load_control_cells(
             shape=(idx.size, src_genes.size),
         )
 
-    # Re-index into the submission gene space, leaving absent genes at zero.
+    # Re-index into the submission gene space by rewriting the column indices in
+    # place.  A sparse permutation matmul would do the same thing and allocate
+    # several copies of a matrix this size on the way.
     pos = {g: i for i, g in enumerate(np.asarray(genes, dtype=str))}
-    col = np.array([pos.get(g, -1) for g in src_genes])
-    keep = col >= 0
-    out = sp.csr_matrix((src.shape[0], len(genes)), dtype=np.float32)
-    sub = src[:, np.flatnonzero(keep)]
-    mapping = sp.csr_matrix(
-        (
-            np.ones(int(keep.sum()), dtype=np.float32),
-            (np.arange(int(keep.sum())), col[keep]),
-        ),
-        shape=(int(keep.sum()), len(genes)),
+    col = np.array([pos.get(g, -1) for g in src_genes], dtype=np.int64)
+    new_indices = col[src.indices]
+    keep = new_indices >= 0
+    if not keep.all():
+        # Drop entries for genes absent from the submission gene space, fixing
+        # up the row boundaries as we go.
+        per_row = (
+            np.add.reduceat(keep.astype(np.int64), src.indptr[:-1])
+            if src.nnz
+            else np.zeros(src.shape[0], np.int64)
+        )
+        per_row[np.diff(src.indptr) == 0] = 0
+        indptr = np.concatenate([[0], np.cumsum(per_row)])
+    else:
+        indptr = src.indptr
+    out = sp.csr_matrix(
+        (src.data[keep].astype(np.float32), new_indices[keep], indptr),
+        shape=(src.shape[0], len(genes)),
     )
-    out = (sub @ mapping).tocsr()
-    logger.info("control matrix %s, %d stored entries", out.shape, out.nnz)
+    out.sort_indices()
+    logger.info(
+        "control matrix %s, %d stored entries (%d dropped: gene not in the 2026 space)",
+        out.shape,
+        out.nnz,
+        int((~keep).sum()),
+    )
     return out
 
 
