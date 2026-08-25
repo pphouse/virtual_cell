@@ -100,6 +100,19 @@ def parse_args() -> argparse.Namespace:
         help="budgeted mode: declare this many genes per perturbation as responding",
     )
     p.add_argument("--margin", type=float, default=1.35, help="budgeted mode: magnitude margin")
+    p.add_argument(
+        "--generic-weight",
+        type=float,
+        default=1.0,
+        help="budgeted mode: weight on the generic knockdown response",
+    )
+    p.add_argument(
+        "--specific-weight",
+        type=float,
+        default=0.0,
+        help="budgeted mode: weight on the transfer model's target-specific delta "
+        "(needs --library and --string-adj)",
+    )
     p.add_argument("--top-margin", type=float, default=2.0, help="budgeted mode: head margin")
     p.add_argument(
         "--generic-lines",
@@ -142,11 +155,17 @@ def main() -> None:
             n_calls=args.n_calls,
             margin=args.margin,
             top_margin=args.top_margin,
+            generic_weight=args.generic_weight,
+            specific_weight=args.specific_weight,
             seed=args.seed,
         )
+        transfer = _fit_transfer(args, bundle, library) if args.specific_weight else None
 
         def predictor_for(context: str, counts: sp.csr_matrix, genes: np.ndarray):
-            return BudgetedPredictor(cfg, generic).fit(counts, genes)
+            specific = (
+                _SpecificSignal(transfer, context, counts, genes) if transfer is not None else None
+            )
+            return BudgetedPredictor(cfg, generic, specific=specific).fit(counts, genes)
 
     elif args.library:
         from vcc2026.features import load_embeddings
@@ -226,6 +245,8 @@ def main() -> None:
         "model": "budgeted" if args.n_calls else ("transfer" if args.library else "control-only"),
         "n_calls": args.n_calls,
         "margin": args.margin,
+        "generic_weight": args.generic_weight,
+        "specific_weight": args.specific_weight,
         "knockdown_residual": args.knockdown_residual,
         "trans_beta": args.trans_beta,
         "alpha": args.alpha,
@@ -241,6 +262,50 @@ def main() -> None:
         from vcc2026.vccfile import write_vcc
 
         write_vcc(out, args.vcc)
+
+
+def _fit_transfer(args, bundle, library):
+    """The CCDT model, fitted for use as the budgeted predictor's specific signal."""
+    import scipy.sparse as sp_
+
+    from vcc2026.model import ContextTransferModel
+    from vcc2026.network import string_features
+
+    adj = sp_.load_npz(args.string_adj)
+    needed = sorted(set(map(str, bundle.perturbations)) | set(library.targets()))
+    features = string_features(adj, bundle.genes, subset=needed)
+    return ContextTransferModel(
+        ModelConfig(
+            alpha=args.alpha,
+            n_components=args.n_components or ModelConfig.n_components,
+            n_neighbours=args.n_neighbours,
+            magnitude_gamma=args.magnitude_gamma,
+            neighbour_power=args.neighbour_power,
+            shared_shrink=args.shared_shrink,
+            trans_similarity_floor=args.trans_similarity_floor,
+            seed=args.seed,
+        )
+    ).fit(library, features=features)
+
+
+class _SpecificSignal:
+    """The transfer model's delta, as a ranking signal rather than a fold change.
+
+    Only the sign and the relative size are read, so the normalized-log delta is
+    handed over as it stands; the emitted magnitude comes from the significance
+    threshold instead.
+    """
+
+    def __init__(self, model, context: str, counts: sp.csr_matrix, genes: np.ndarray) -> None:
+        from vcc2026.context import CellContext
+        from vcc2026.normalize import normlog
+
+        x, target_sum = normlog(counts)
+        self._ctx = CellContext(name=context, genes=genes, control=x, target_sum=target_sum)
+        self._model = model
+
+    def predict_log2fc(self, targets: list[str]) -> np.ndarray:
+        return self._model.predict(targets, self._ctx).delta
 
 
 def _generic_signal(library, lines: list[str], genes: np.ndarray) -> np.ndarray:
@@ -285,7 +350,7 @@ class _TransferAdapter:
         # ... except on the target gene itself, where the knockdown is the one
         # thing we are sure of. Routing it through the same shrinkage would
         # quietly halve every knockdown the model claims to make -- the same
-        # failure the counts pseudo-count caused (docs/05 3).
+        # failure the counts pseudo-count caused (docs/05 §3).
         residual = self._model.knockdown
         for i, target in enumerate(targets):
             j = self._ctx.gene_index(target)
