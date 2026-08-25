@@ -11,10 +11,18 @@ Arc Institute の [Virtual Cell Challenge 2026](https://arcinstitute.org/news/vi
 チャレンジ CLI に接続済み。データ取得 → 予測 → `.vcc` → 提出 → スコア取得まで
 実際に通っている。
 
-| 提出 | 内容 | Overall | 備考 |
-|---|---|---|---|
-| v0 | on-target のみ（残存率 0.30） | **−0.0638** | 損失はほぼ全て `fid` (−0.342)。排出モデルのバグを暴いた |
-| v1 | 排出モデル修正 + 実測残存率 0.148 | 採点中 | |
+| 提出 | 内容 | Overall |
+|---|---|---|
+| v0 | on-target のみ（残存率 0.30） | −0.0638 |
+| v1 | 排出モデル修正 + 実測残存率 0.148 | −0.3035 |
+| v2 | STRING 転移（H1 300 署名）、排出モデル再設計 | 未提出（v3 に置換） |
+| v3 | H1/K562/RPE1 の 2,596 署名から転移 | 採点中 |
+
+v0→v1 の悪化が最も有益だった: **DE 系 4 指標は yield（有意遺伝子を出す量）を見ており、
+何も予測しないのは棄権ではなく大きな失点**だと分かった（`docs/05 §1b`）。
+
+転移元は 3 細胞株 4,894 署名（Arc の 2025 公開データ + Replogle K562/RPE1）。
+遺伝子類似度は STRING、評価は 2025 データの leave-one-out（`docs/05 §3c`）。
 
 ## ドキュメント
 
@@ -47,24 +55,31 @@ end-to-end の深層モデルにしていないのは、2025 の優勝チーム�
 
 すべて `docs/05` に、再現スクリプト付きで記録。
 
-**排出モデルが偽の DE を撒いていた。** 初回提出は、摂動を予測していない
-遺伝子に対して全 300 摂動 × 3 文脈で同じ向きの偽 DE を約 93 個ずつ渡していた。
-実際のノックダウン応答は down が優勢なので、これだけで方向一致率が偶然を下回り
-`fid = −0.34` を生んでいた。**分散と検出率を実細胞に 1% 以内で合わせても
-すり抜けた** — Wilcoxon 検定は分布の形そのものを見る。
-今は「予測がゼロなら排出は恒等写像」を構成上保証している。
+**排出モデルにバグが 4 つあった。** 初回スコアの損失は生物学ではなく排出モデル
+だった。1 つ直すたびに測って次が見つかった: 予測ゼロの遺伝子に偽 DE を撒く、
+ノックダウンを希釈する、Poisson 再抽出が系統的に DOWN に偏る、
+擬似カウントが up を過剰配送する。**分散と検出率を実細胞に 1% 以内で合わせても
+すり抜けた** — Wilcoxon 検定は分布の形そのものを見る。今は
+「予測がゼロなら恒等写像」「要求した fold change が両方向で届く」を
+構成上保証し、全遺伝子を引き直しても偽 DE は 0 件。
 
-**コントロール細胞の共発現は、トランス応答を予測しない。** 2025 の実測 150 標的で
-2 通り測って両方ゼロ。相関の平均 −0.003、正だった摂動は 44.7%（偶然以下）。
-leave-one-out では「全摂動の平均署名を出すだけ」に負ける（r 0.165 vs 0.188、
-discrimination 0.509 vs 0.500）。
+**細胞株間転移は機能している。** 片方の株だけから作ったライブラリで
+もう片方を予測すると、方向一致率は 0.60〜0.74（ベースライン 0.511）を維持し、
+`pds` はほとんど劣化しない。失っているのは「正しさ」ではなく **yield**。
 
-**ボトルネックは遺伝子表現で、モデルの形ではない。** 同じ枠組みに真の署名類似度
-（oracle）を入れると r=0.471 / discrimination 0.748 に届く。STRING の機能的
-相互作用ネットワークは本物の改善（r=0.235 / discrimination 0.584）だが、
-oracle にはまだ遠い。
+**転移元の署名数が、細胞株の近さより効く。** RPE1 を予測するとき、
+K562 の 2,057 署名（最も遠い株）は H1 の 300 署名を大きく上回る
+（pds 0.704 vs 0.598）。300 署名では STRING kNN が近傍を見つけられない。
 
-**CRISPRi の実効率は残存率 0.148**（150/150 が下がる）。文献値 0.30 は 2 倍高すぎた。
+**ノックダウン効率は転移しない。** トランス署名は生物学なので株をまたぐが、
+効率は試薬の性質。Arc の CRISPRi は残存率 0.13〜0.16、Replogle は 0.54〜0.58。
+プールすると数の多い方に引きずられる。
+
+**コントロール細胞の共発現は、トランス応答を予測しない。** 実測 150 標的で
+2 通り測って両方ゼロ（相関 −0.003、正は 44.7% で偶然以下）。
+
+**`pds` は効果量に一切依存しない。** コサインなのでスケール不変。
+真の方向を与えると 1.000、真の効果量を与えても変化なし。上げる道は表現の質だけ。
 
 ## クイックスタート
 
@@ -83,9 +98,22 @@ export VCC_TOKEN=<your key>
 
 .venv/bin/python scripts/predict_vcc2026.py \
   --bundle data/vcc --out out/sub.h5ad --vcc out/sub.vcc \
-  --library out/lib_h1.npz --string-adj out/string_adj.npz
+  --library out/lib.npz --string-adj out/string_adj.npz \
+  --knockdown-lines H1,H1val,H1test \
+  --alpha 0.85 --magnitude-gamma 1.0 --n-components 100 \
+  --neighbour-power 2.0 --n-neighbours 100
 
 .venv-cli/bin/vcc submit out/sub.vcc -m "..." --wait
+```
+
+設定は提出ではなくオフラインで決める（1 提出は実時間 1 時間、1 日 2 回まで）:
+
+```bash
+.venv/bin/python scripts/offline_score_2025.py --library out/lib.npz \
+  --string-adj out/string_adj.npz --sweep "alpha=0.7,0.85,1.0"
+.venv/bin/python scripts/cross_line_transfer.py --library out/lib.npz \
+  --string-adj out/string_adj.npz --case "H1+K562->RPE1"
+.venv/bin/python scripts/null_emission_test.py --controls data/vcc/context_A.h5ad --out out/null.json
 ```
 
 `vcc prep` はこの環境では動かない（2.06e9 stored entries に対し約 16 GiB の
