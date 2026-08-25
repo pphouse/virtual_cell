@@ -3,11 +3,13 @@
 
     python scripts/predict_vcc2026.py --bundle ~/vcc --out out/submission.h5ad
 
-With `--library` it uses the full Context-Conditioned Delta Transfer model,
+With `--n-calls` it uses the budgeted predictor: a ranked call set of that size
+per perturbation, everything else passed through unchanged.  With `--library`
+and no budget it uses the full Context-Conditioned Delta Transfer model,
 transferring measured signatures from source screens into each held-out
-context.  Without one it falls back to the control-only predictor, which knows
-nothing but the target line's unperturbed cells -- the on-target knockdown and,
-if `--trans-beta` is set, a co-expression trans signature.
+context.  Without either it falls back to the control-only predictor, which
+knows nothing but the target line's unperturbed cells -- the on-target knockdown
+and, if `--trans-beta` is set, a co-expression trans signature.
 """
 
 from __future__ import annotations
@@ -91,6 +93,19 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="debugging only; produces an invalid submission",
     )
+    p.add_argument(
+        "--n-calls",
+        type=int,
+        default=0,
+        help="budgeted mode: declare this many genes per perturbation as responding",
+    )
+    p.add_argument("--margin", type=float, default=1.35, help="budgeted mode: magnitude margin")
+    p.add_argument("--top-margin", type=float, default=2.0, help="budgeted mode: head margin")
+    p.add_argument(
+        "--generic-lines",
+        default=None,
+        help="budgeted mode: library lines the generic response is averaged over",
+    )
     p.add_argument("--seed", type=int, default=0)
     return p.parse_args()
 
@@ -111,7 +126,29 @@ def main() -> None:
     if missing:
         logger.warning("%d official targets are outside the submission gene space", missing)
 
-    if args.library:
+    if args.n_calls:
+        from vcc2026.budget import BudgetConfig, BudgetedPredictor
+        from vcc2026.library import SignatureLibrary
+
+        library = SignatureLibrary.load(args.library)
+        lines = (
+            [x.strip() for x in args.generic_lines.split(",")]
+            if args.generic_lines
+            else list(library.lines)
+        )
+        generic = _generic_signal(library, lines, bundle.genes)
+        logger.info("generic response averaged over %s", lines)
+        cfg = BudgetConfig(
+            n_calls=args.n_calls,
+            margin=args.margin,
+            top_margin=args.top_margin,
+            seed=args.seed,
+        )
+
+        def predictor_for(context: str, counts: sp.csr_matrix, genes: np.ndarray):
+            return BudgetedPredictor(cfg, generic).fit(counts, genes)
+
+    elif args.library:
         from vcc2026.features import load_embeddings
         from vcc2026.library import SignatureLibrary
         from vcc2026.model import ContextTransferModel
@@ -186,7 +223,9 @@ def main() -> None:
         "contexts": bundle.contexts,
         "n_perturbations": int(bundle.perturbations.size),
         "cells_per_pert": bundle.cells_per_pert,
-        "model": "transfer" if args.library else "control-only",
+        "model": "budgeted" if args.n_calls else ("transfer" if args.library else "control-only"),
+        "n_calls": args.n_calls,
+        "margin": args.margin,
         "knockdown_residual": args.knockdown_residual,
         "trans_beta": args.trans_beta,
         "alpha": args.alpha,
@@ -202,6 +241,22 @@ def main() -> None:
         from vcc2026.vccfile import write_vcc
 
         write_vcc(out, args.vcc)
+
+
+def _generic_signal(library, lines: list[str], genes: np.ndarray) -> np.ndarray:
+    """Mean knockdown response over the named screens, on the submission gene axis."""
+    per_line = [
+        np.vstack([library.deltas[line][t] for t in library.targets(line)]).mean(0)
+        for line in lines
+    ]
+    mean = np.mean(per_line, axis=0)
+    index = {str(g): i for i, g in enumerate(library.genes)}
+    out = np.zeros(genes.size)
+    for i, gene in enumerate(genes):
+        j = index.get(str(gene))
+        if j is not None:
+            out[i] = mean[j]
+    return out
 
 
 class _TransferAdapter:
@@ -230,7 +285,7 @@ class _TransferAdapter:
         # ... except on the target gene itself, where the knockdown is the one
         # thing we are sure of. Routing it through the same shrinkage would
         # quietly halve every knockdown the model claims to make -- the same
-        # failure the counts pseudo-count caused (docs/05 §3).
+        # failure the counts pseudo-count caused (docs/05 3).
         residual = self._model.knockdown
         for i, target in enumerate(targets):
             j = self._ctx.gene_index(target)
