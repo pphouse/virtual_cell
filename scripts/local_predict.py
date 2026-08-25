@@ -51,6 +51,60 @@ def generic_signal(lib: SignatureLibrary, lines: list[str], genes: np.ndarray) -
     return out
 
 
+class _Specific:
+    """The transfer model's delta for one context, as a ranking signal.
+
+    The library lives on the 2026 gene axis and a local reference on its own, so
+    the delta is mapped back to the reference's genes on the way out.
+    """
+
+    def __init__(self, model, ctx, columns) -> None:
+        self._model, self._ctx, self._columns = model, ctx, columns
+
+    def predict_log2fc(self, targets: list[str]):
+        delta = self._model.predict(targets, self._ctx).delta
+        out = np.zeros((len(targets), self._columns.size))
+        have = self._columns >= 0
+        out[:, have] = delta[:, self._columns[have]]
+        return out
+
+
+def _specific_signal(lib, args, targets, control, genes):
+    import scipy.sparse as sp_
+
+    from vcc2026.context import CellContext
+    from vcc2026.model import ContextTransferModel, ModelConfig
+    from vcc2026.network import string_features
+    from vcc2026.normalize import normlog
+
+    lines = [x.strip() for x in args.specific_lines.split(",")]
+    sub = SignatureLibrary(genes=lib.genes)
+    for line in lines:
+        sub.baseline[line] = lib.baseline[line]
+        sub.deltas[line] = dict(lib.deltas[line])
+        sub.n_cells[line] = dict(lib.n_cells.get(line, {}))
+        sub.target_sum[line] = lib.target_sum.get(line, 1e4)
+    feats = string_features(
+        sp_.load_npz(args.string_adj), lib.genes, subset=sorted(set(targets) | set(sub.targets()))
+    )
+    model = ContextTransferModel(
+        ModelConfig(alpha=1.0, n_components=100, n_neighbours=100, neighbour_power=2.0)
+    ).fit(sub, features=feats)
+    x, target_sum = normlog(control)
+    mu_local = np.asarray(x.mean(axis=0)).ravel()
+    index = {str(g): i for i, g in enumerate(genes)}
+    mu = np.array([mu_local[index[str(g)]] if str(g) in index else 0.0 for g in lib.genes])
+    ctx = CellContext(
+        name="local",
+        genes=lib.genes,
+        control=np.repeat(mu[None, :], 2, axis=0),
+        target_sum=target_sum,
+    )
+    lg = {str(g): i for i, g in enumerate(lib.genes)}
+    columns = np.array([lg.get(str(g), -1) for g in genes])
+    return _Specific(model, ctx, columns)
+
+
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     p = argparse.ArgumentParser(description=__doc__)
@@ -58,6 +112,13 @@ def main() -> None:
     p.add_argument("--out", required=True)
     p.add_argument("--library", required=True)
     p.add_argument("--lines", default="K562,RPE1")
+    p.add_argument(
+        "--specific-lines",
+        default=None,
+        help="fit the transfer model on these lines and rank by its delta instead "
+        "of the generic response; needs --string-adj",
+    )
+    p.add_argument("--string-adj", default=None)
     p.add_argument("--n-calls", type=int, default=BudgetConfig.n_calls)
     p.add_argument("--margin", type=float, default=BudgetConfig.margin)
     p.add_argument("--top-margin", type=float, default=BudgetConfig.top_margin)
@@ -80,11 +141,20 @@ def main() -> None:
 
     lib = SignatureLibrary.load(args.library)
     generic = generic_signal(lib, [x.strip() for x in args.lines.split(",")], genes)
+    specific = None
+    if args.specific_lines:
+        specific = _specific_signal(lib, args, targets, control, genes)
     model = BudgetedPredictor(
         BudgetConfig(
-            n_calls=args.n_calls, margin=args.margin, top_margin=args.top_margin, seed=args.seed
+            n_calls=args.n_calls,
+            margin=args.margin,
+            top_margin=args.top_margin,
+            generic_weight=0.0 if args.specific_lines else 1.0,
+            specific_weight=1.0 if args.specific_lines else 0.0,
+            seed=args.seed,
         ),
         generic,
+        specific=specific,
     ).fit(control, genes)
 
     proportions = context_mean_proportions(control)

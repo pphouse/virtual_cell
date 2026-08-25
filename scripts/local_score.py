@@ -63,6 +63,14 @@ def main() -> None:
     p.add_argument("--de-real", required=True)
     p.add_argument("--de-pred", default=None, help="reuse a table instead of recomputing")
     p.add_argument("--out-de-pred", default=None)
+    p.add_argument(
+        "--max-n-real",
+        type=int,
+        default=0,
+        help="score only perturbations the reference moves at most this many genes for; "
+        "0 keeps all. The 2026 panel's mean n_real is about 275 (docs/06), and a local "
+        "panel of stronger knockdowns answers a different question.",
+    )
     args = p.parse_args()
 
     if args.de_pred:
@@ -125,6 +133,19 @@ def main() -> None:
         int(np.median((rp < 0.05).sum(1))),
         int(np.median((pp < 0.05).sum(1))),
     )
+
+    if args.max_n_real:
+        n_real = (rp < 0.05).sum(1)
+        keep = {perts[i] for i in np.flatnonzero(n_real <= args.max_n_real)}
+        logger.info(
+            "restricting to %d of %d perturbations with n_real <= %d (mean %d)",
+            len(keep),
+            len(perts),
+            args.max_n_real,
+            int(n_real[n_real <= args.max_n_real].mean()),
+        )
+        real_de = real_de.filter(pl.col("target").is_in(list(keep)))
+        pred_de = pred_de.filter(pl.col("target").is_in(list(keep)))
 
     # The scorer's own readers, which take DE tables directly -- no matrices, and
     # no room for this project's reimplementation to drift from them.
