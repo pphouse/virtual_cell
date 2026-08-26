@@ -68,12 +68,19 @@ class BudgetConfig:
     # and is flat above that, so the value is a plateau rather than a peak.
     proximity_weight: float = 0.0
     # A target-specific signal, when there is one, is worth more than the generic
-    # response it replaces: measured K562+RPE1 -> H1 (a different lab and a
-    # different line, which is the transfer the challenge asks for), directional
-    # accuracy over the top 50 ranked genes is 0.611 against the generic's 0.562,
-    # and it still leads at every depth.  It is also the only part of the
-    # prediction that differs between perturbations, so it is the only part
-    # `pds_cosine` can see.
+    # response: measured K562+RPE1 -> H1 (a different lab and a different line,
+    # which is the transfer the challenge asks for), directional accuracy over
+    # the top 50 ranked genes is 0.611 against the generic's 0.562, and it still
+    # leads at every depth.  It is also the only part of the prediction that
+    # differs between perturbations, so it is the only part `pds_cosine` can see.
+    #
+    # Worth more is not worth instead.  The two carry different information, and
+    # on all three validation lines mixing them beats either alone at every ratio
+    # tried, by more than the proximity term is worth: against the specific signal
+    # on its own, a generic weight of 2 gains 0.016 of overall on K562, 0.045 on
+    # RPE1 and 0.030 on H1, with all five members agreeing in sign.  Weights are
+    # ratios -- each component is put on unit scale in `_score` before it is
+    # weighted -- so 2 means twice the generic, whatever units it arrived in.
     propensity_coef: tuple[float, float, float, float] = field(default=PROPENSITY_COEF)
     seed: int = 0
 
@@ -135,6 +142,7 @@ class BudgetedPredictor:
 
     def fit(self, counts: sp.csr_matrix, genes: np.ndarray) -> BudgetedPredictor:
         self.genes = np.asarray(genes)
+        self._generic_scale = float(np.mean(np.abs(self.generic))) or 1.0
         self.mean_cpm, self.fano = control_statistics(counts)
         self.tested = self.mean_cpm > self.cfg.min_cpm
         self.prop = propensity(self.mean_cpm, self.fano, self.cfg.propensity_coef)
@@ -154,11 +162,20 @@ class BudgetedPredictor:
         return self
 
     def _score(
-        self, row_specific: np.ndarray | None, target: str
+        self, row_specific: np.ndarray | None, target: str, specific_scale: float = 1.0
     ) -> tuple[np.ndarray, np.ndarray]:
-        signal = self.cfg.generic_weight * self.generic
+        # Each component is put on unit scale before it is weighted, so a weight
+        # is a mixing ratio rather than an accident of what units the component
+        # happens to arrive in -- the generic response measured as a log2 fold
+        # change is six times the size of the same response as a library delta,
+        # and a ratio fitted in one would be wrong by that factor in the other.
+        # A component is scaled by *its own* global mean rather than per target,
+        # which is the whole point of mixing: a target the transfer model has
+        # little to say about keeps its small specific signal and lets the
+        # generic response carry the ranking.
+        signal = self.cfg.generic_weight * self.generic / self._generic_scale
         if row_specific is not None and self.cfg.specific_weight:
-            signal = signal + self.cfg.specific_weight * row_specific
+            signal = signal + self.cfg.specific_weight * row_specific / specific_scale
         if self.proximity is not None and self.cfg.proximity_weight:
             # Scaled against the signal it is joining, so the weight means the
             # same thing whatever the transfer model happens to be emitting.
@@ -175,15 +192,19 @@ class BudgetedPredictor:
         the offline validator scores exactly what the submission would express.
         """
         specific = None
+        specific_scale = 1.0
         if self.specific is not None:
             specific = np.asarray(self.specific.predict_log2fc(targets), dtype=np.float64)
+            specific_scale = float(np.mean(np.abs(specific))) or 1.0
         shape = (len(targets), self.genes.size)
         out = np.zeros(shape, dtype=np.float32)
         key = np.zeros(shape, dtype=np.float32)
         direction = np.zeros(shape, dtype=np.float32)
         call = np.zeros(shape, dtype=bool)
         for i, target in enumerate(targets):
-            score, sign = self._score(None if specific is None else specific[i], target)
+            score, sign = self._score(
+                None if specific is None else specific[i], target, specific_scale
+            )
             own = self._index.get(str(target))
             if own is not None:
                 # Never scored -- every member drops the perturbation's own target

@@ -80,3 +80,48 @@ def test_confidence_orders_the_magnitudes_within_a_call_set():
     order = np.argsort(-pred.key[0][take])
     ramp = np.abs(pred.lfc[0][take][order]) / model.magnitude[take][order]
     assert np.all(np.diff(ramp) <= 1e-6)
+
+
+class _Constant:
+    """A target-specific signal that ignores the target, for scale tests."""
+
+    def __init__(self, row):
+        self._row = np.asarray(row, dtype=float)
+
+    def predict_log2fc(self, targets):
+        return np.repeat(self._row[None, :], len(targets), axis=0)
+
+
+def _mixed(generic, specific, scale_generic=1.0, scale_specific=1.0):
+    counts, genes = _context()
+    cfg = BudgetConfig(n_calls=15, specific_weight=1.0, generic_weight=0.4)
+    model = BudgetedPredictor(
+        cfg, generic * scale_generic, specific=_Constant(specific * scale_specific)
+    ).fit(counts, genes)
+    return model.predict(["G3"])
+
+
+def test_a_mixing_weight_is_a_ratio_not_a_unit():
+    """The same response arrives as a log2 fold change in one place and as a
+    library delta six times smaller in another; a weight fitted in one has to
+    mean the same thing in the other."""
+    rng = np.random.default_rng(3)
+    generic, specific = rng.normal(size=60), rng.normal(size=60)
+    base = _mixed(generic, specific)
+    for sg, ss in ((5.9, 1.0), (1.0, 0.17), (100.0, 0.01)):
+        other = _mixed(generic, specific, sg, ss)
+        assert np.array_equal(other.call, base.call)
+        assert np.array_equal(other.sign, base.sign)
+
+
+def test_mixing_actually_mixes():
+    """Guard the test above from passing because the generic side is ignored."""
+    rng = np.random.default_rng(4)
+    generic, specific = rng.normal(size=60), rng.normal(size=60)
+    counts, genes = _context()
+    only = BudgetedPredictor(
+        BudgetConfig(n_calls=15, specific_weight=1.0, generic_weight=0.0),
+        generic,
+        specific=_Constant(specific),
+    ).fit(counts, genes)
+    assert not np.array_equal(only.predict(["G3"]).call, _mixed(generic, specific).call)

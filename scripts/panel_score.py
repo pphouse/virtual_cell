@@ -43,7 +43,7 @@ import scipy.sparse as sp
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from build_local_context import read_obs_column, read_var_names, stream_rows  # noqa: E402
-from local_predict import specific_signal  # noqa: E402
+from local_predict import generic_signal, specific_signal  # noqa: E402
 from offline_score_2025 import pds_cosine  # noqa: E402
 from strategy_search import evaluate  # noqa: E402
 
@@ -203,6 +203,13 @@ def main() -> None:
     )
     p.add_argument("--string-adj", default=None)
     p.add_argument("--specific-shrink", type=float, default=1.0)
+    p.add_argument(
+        "--generic-from-library",
+        action="store_true",
+        help="take the generic response from the library rather than from the other panels' "
+        "DE tables, which is what the submission does; the two differ in shape as well as "
+        "in units, so a mixing weight fitted here transfers only if this is set",
+    )
     p.add_argument("--n-calls", type=int, default=8000)
     p.add_argument("--margin", type=float, default=1.35)
     p.add_argument("--top-margin", type=float, default=2.0)
@@ -238,12 +245,20 @@ def main() -> None:
         arms[label] = replace(base, **over)
 
     rows = []
+    if args.generic_from_library and lib is None:
+        p.error("--generic-from-library needs --library")
+
     for panel in panels:
         sources = [q for q in panels if q.name != panel.name]
         if not sources:
             logger.warning("%s has no source line; skipping", panel.name)
             continue
-        generic = transfer(sources, panel.genes)
+        if args.generic_from_library:
+            lines = sources_for(panel, list(lib.baseline))
+            generic = generic_signal(lib, lines, panel.genes)
+            logger.info("generic response from library lines %s", ",".join(lines))
+        else:
+            generic = transfer(sources, panel.genes)
         specific = None
         if lib is not None:
             specific = specific_signal(
