@@ -115,6 +115,19 @@ def parse_args() -> argparse.Namespace:
     )
     p.add_argument("--top-margin", type=float, default=2.0, help="budgeted mode: head margin")
     p.add_argument(
+        "--gene-positions",
+        default=None,
+        help="budgeted mode: {symbol: [chromosome, midpoint]} JSON, enabling the "
+        "CRISPRi proximity term",
+    )
+    p.add_argument(
+        "--proximity-weight",
+        type=float,
+        default=0.0,
+        help="budgeted mode: how hard to pull a target's genomic neighbours toward "
+        "silence, relative to the mean |signal|",
+    )
+    p.add_argument(
         "--generic-lines",
         default=None,
         help="budgeted mode: library lines the generic response is averaged over",
@@ -157,15 +170,23 @@ def main() -> None:
             top_margin=args.top_margin,
             generic_weight=args.generic_weight,
             specific_weight=args.specific_weight,
+            proximity_weight=args.proximity_weight,
             seed=args.seed,
         )
         transfer = _fit_transfer(args, bundle, library) if args.specific_weight else None
+        proximity = None
+        if args.gene_positions and args.proximity_weight:
+            from vcc2026.proximity import ProximitySignal, load_gene_positions
+
+            proximity = ProximitySignal(bundle.genes, load_gene_positions(args.gene_positions))
 
         def predictor_for(context: str, counts: sp.csr_matrix, genes: np.ndarray):
             specific = (
                 _SpecificSignal(transfer, context, counts, genes) if transfer is not None else None
             )
-            return BudgetedPredictor(cfg, generic, specific=specific).fit(counts, genes)
+            return BudgetedPredictor(cfg, generic, specific=specific, proximity=proximity).fit(
+                counts, genes
+            )
 
     elif args.library:
         from vcc2026.features import load_embeddings
@@ -247,6 +268,7 @@ def main() -> None:
         "margin": args.margin,
         "generic_weight": args.generic_weight,
         "specific_weight": args.specific_weight,
+        "proximity_weight": args.proximity_weight,
         "knockdown_residual": args.knockdown_residual,
         "trans_beta": args.trans_beta,
         "alpha": args.alpha,

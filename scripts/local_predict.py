@@ -88,7 +88,13 @@ def _specific_signal(lib, args, targets, control, genes):
         sp_.load_npz(args.string_adj), lib.genes, subset=sorted(set(targets) | set(sub.targets()))
     )
     model = ContextTransferModel(
-        ModelConfig(alpha=1.0, n_components=100, n_neighbours=100, neighbour_power=2.0)
+        ModelConfig(
+            alpha=1.0,
+            n_components=30,
+            n_neighbours=100,
+            neighbour_power=2.0,
+            shared_shrink=args.specific_shrink,
+        )
     ).fit(sub, features=feats)
     x, target_sum = normlog(control)
     mu_local = np.asarray(x.mean(axis=0)).ravel()
@@ -119,6 +125,9 @@ def main() -> None:
         "of the generic response; needs --string-adj",
     )
     p.add_argument("--string-adj", default=None)
+    p.add_argument("--gene-positions", default=None)
+    p.add_argument("--proximity-weight", type=float, default=0.0)
+    p.add_argument("--specific-shrink", type=float, default=0.0)
     p.add_argument("--n-calls", type=int, default=BudgetConfig.n_calls)
     p.add_argument("--margin", type=float, default=BudgetConfig.margin)
     p.add_argument("--top-margin", type=float, default=BudgetConfig.top_margin)
@@ -144,6 +153,11 @@ def main() -> None:
     specific = None
     if args.specific_lines:
         specific = _specific_signal(lib, args, targets, control, genes)
+    proximity = None
+    if args.gene_positions and args.proximity_weight:
+        from vcc2026.proximity import ProximitySignal, load_gene_positions
+
+        proximity = ProximitySignal(genes, load_gene_positions(args.gene_positions))
     model = BudgetedPredictor(
         BudgetConfig(
             n_calls=args.n_calls,
@@ -151,10 +165,12 @@ def main() -> None:
             top_margin=args.top_margin,
             generic_weight=0.0 if args.specific_lines else 1.0,
             specific_weight=1.0 if args.specific_lines else 0.0,
+            proximity_weight=args.proximity_weight,
             seed=args.seed,
         ),
         generic,
         specific=specific,
+        proximity=proximity,
     ).fit(control, genes)
 
     proportions = context_mean_proportions(control)

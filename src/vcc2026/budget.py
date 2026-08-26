@@ -63,6 +63,10 @@ class BudgetConfig:
     min_abs_log2fc: float = 0.05
     specific_weight: float = 0.0
     generic_weight: float = 1.0
+    # Relative to the mean |signal|, how hard to pull a target's genomic
+    # neighbours toward silence. pds rises from 0.689 to 0.705 between 0 and 20
+    # and is flat above that, so the value is a plateau rather than a peak.
+    proximity_weight: float = 0.0
     # A target-specific signal, when there is one, is worth more than the generic
     # response it replaces: measured K562+RPE1 -> H1 (a different lab and a
     # different line, which is the transfer the challenge asks for), directional
@@ -104,10 +108,13 @@ def significance_magnitude(mean_cpm: np.ndarray, margin: float) -> np.ndarray:
 class BudgetedPredictor:
     """A per-target natural-log fold change with a fixed number of non-zero entries."""
 
-    def __init__(self, cfg: BudgetConfig, generic_log2fc: np.ndarray, specific=None) -> None:
+    def __init__(
+        self, cfg: BudgetConfig, generic_log2fc: np.ndarray, specific=None, proximity=None
+    ) -> None:
         self.cfg = cfg
         self.generic = np.asarray(generic_log2fc, dtype=np.float64)
         self.specific = specific
+        self.proximity = proximity
 
     def fit(self, counts: sp.csr_matrix, genes: np.ndarray) -> BudgetedPredictor:
         self.genes = np.asarray(genes)
@@ -129,10 +136,17 @@ class BudgetedPredictor:
         )
         return self
 
-    def _score(self, row_specific: np.ndarray | None) -> tuple[np.ndarray, np.ndarray]:
+    def _score(
+        self, row_specific: np.ndarray | None, target: str
+    ) -> tuple[np.ndarray, np.ndarray]:
         signal = self.cfg.generic_weight * self.generic
         if row_specific is not None and self.cfg.specific_weight:
             signal = signal + self.cfg.specific_weight * row_specific
+        if self.proximity is not None and self.cfg.proximity_weight:
+            # Scaled against the signal it is joining, so the weight means the
+            # same thing whatever the transfer model happens to be emitting.
+            unit = float(np.mean(np.abs(signal))) or 1.0
+            signal = signal + self.cfg.proximity_weight * unit * self.proximity.weights(target)
         return self.prop * np.abs(signal) * self.tested, np.sign(signal)
 
     def predict_lfc(self, targets: list[str]) -> np.ndarray:
@@ -141,7 +155,7 @@ class BudgetedPredictor:
             specific = np.asarray(self.specific.predict_log2fc(targets), dtype=np.float64)
         out = np.zeros((len(targets), self.genes.size), dtype=np.float32)
         for i, target in enumerate(targets):
-            score, sign = self._score(None if specific is None else specific[i])
+            score, sign = self._score(None if specific is None else specific[i], target)
             own = self._index.get(str(target))
             if own is not None:
                 # Never scored -- every member drops the perturbation's own target
