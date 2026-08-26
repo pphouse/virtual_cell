@@ -69,7 +69,13 @@ class _Specific:
         return out
 
 
-def _specific_signal(lib, args, targets, control, genes):
+def specific_signal(lib, lines, string_adj, shrink, targets, control, genes):
+    """Fit the transfer model on `lines` and expose its delta on `genes`.
+
+    The control block is only used for its mean profile, which is what the model
+    reads as the context; it is the same block the significance threshold and the
+    propensity come from, so nothing outside the reference enters the prediction.
+    """
     import scipy.sparse as sp_
 
     from vcc2026.context import CellContext
@@ -77,7 +83,6 @@ def _specific_signal(lib, args, targets, control, genes):
     from vcc2026.network import string_features
     from vcc2026.normalize import normlog
 
-    lines = [x.strip() for x in args.specific_lines.split(",")]
     sub = SignatureLibrary(genes=lib.genes)
     for line in lines:
         sub.baseline[line] = lib.baseline[line]
@@ -85,7 +90,7 @@ def _specific_signal(lib, args, targets, control, genes):
         sub.n_cells[line] = dict(lib.n_cells.get(line, {}))
         sub.target_sum[line] = lib.target_sum.get(line, 1e4)
     feats = string_features(
-        sp_.load_npz(args.string_adj), lib.genes, subset=sorted(set(targets) | set(sub.targets()))
+        sp_.load_npz(string_adj), lib.genes, subset=sorted(set(targets) | set(sub.targets()))
     )
     model = ContextTransferModel(
         ModelConfig(
@@ -93,7 +98,7 @@ def _specific_signal(lib, args, targets, control, genes):
             n_components=30,
             n_neighbours=100,
             neighbour_power=2.0,
-            shared_shrink=args.specific_shrink,
+            shared_shrink=shrink,
         )
     ).fit(sub, features=feats)
     x, target_sum = normlog(control)
@@ -109,6 +114,13 @@ def _specific_signal(lib, args, targets, control, genes):
     lg = {str(g): i for i, g in enumerate(lib.genes)}
     columns = np.array([lg.get(str(g), -1) for g in genes])
     return _Specific(model, ctx, columns)
+
+
+def _specific_signal(lib, args, targets, control, genes):
+    lines = [x.strip() for x in args.specific_lines.split(",")]
+    return specific_signal(
+        lib, lines, args.string_adj, args.specific_shrink, targets, control, genes
+    )
 
 
 def main() -> None:

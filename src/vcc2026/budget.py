@@ -105,6 +105,23 @@ def significance_magnitude(mean_cpm: np.ndarray, margin: float) -> np.ndarray:
     return margin * thr
 
 
+@dataclass
+class BudgetedPrediction:
+    """What a budgeted prediction asserts, in the four forms the scorer reads."""
+
+    lfc: np.ndarray
+    """Natural-log fold change, zero outside the call set."""
+    key: np.ndarray
+    """Ranking score; the order the submission's p-values will come out in."""
+    sign: np.ndarray
+    """Predicted direction, defined everywhere, read only on the call set."""
+    call: np.ndarray
+    """The genes the submission declares as responding."""
+
+    def log2(self) -> np.ndarray:
+        return self.lfc / LN2
+
+
 class BudgetedPredictor:
     """A per-target natural-log fold change with a fixed number of non-zero entries."""
 
@@ -149,11 +166,22 @@ class BudgetedPredictor:
             signal = signal + self.cfg.proximity_weight * unit * self.proximity.weights(target)
         return self.prop * np.abs(signal) * self.tested, np.sign(signal)
 
-    def predict_lfc(self, targets: list[str]) -> np.ndarray:
+    def predict(self, targets: list[str]) -> BudgetedPrediction:
+        """The call set, its direction, its confidence ordering and its magnitude.
+
+        The emitter only needs the fold changes, but every DE member reads one of
+        the other three as well -- the Jaccard reads the set, fidelity reads the
+        direction, reach reads the ordering -- so they are returned together and
+        the offline validator scores exactly what the submission would express.
+        """
         specific = None
         if self.specific is not None:
             specific = np.asarray(self.specific.predict_log2fc(targets), dtype=np.float64)
-        out = np.zeros((len(targets), self.genes.size), dtype=np.float32)
+        shape = (len(targets), self.genes.size)
+        out = np.zeros(shape, dtype=np.float32)
+        key = np.zeros(shape, dtype=np.float32)
+        direction = np.zeros(shape, dtype=np.float32)
+        call = np.zeros(shape, dtype=bool)
         for i, target in enumerate(targets):
             score, sign = self._score(None if specific is None else specific[i], target)
             own = self._index.get(str(target))
@@ -161,9 +189,12 @@ class BudgetedPredictor:
                 # Never scored -- every member drops the perturbation's own target
                 # gene -- so spending a call on it would waste one.
                 score[own] = -1.0
+            key[i] = score
+            direction[i] = sign
             order = np.argsort(-score)
             take = order[: min(self.cfg.n_calls, order.size)]
             take = take[score[take] > 0.0]
+            call[i, take] = True
             # Reach walks the reference's responding genes in the order the
             # submission's own p-values put them, so confidence has to be
             # *expressed* -- a flat magnitude leaves that ordering to expression
@@ -177,4 +208,8 @@ class BudgetedPredictor:
                 out[i, take] = (
                     sign[take] * self.magnitude[take] * scale * LN2
                 ).astype(np.float32)
-        return out
+        return BudgetedPrediction(lfc=out, key=key, sign=direction, call=call)
+
+    def predict_lfc(self, targets: list[str]) -> np.ndarray:
+        """Natural-log fold change per target, zero everywhere outside the budget."""
+        return self.predict(targets).lfc
