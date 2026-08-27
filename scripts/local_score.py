@@ -24,6 +24,7 @@ import scipy.sparse as sp
 from cell_eval2.de_compute import compute_de
 from cell_eval2.metrics.de import de_lfc_nmae, de_sig_jaccard
 from cell_eval2.metrics.direction import de_direction_fidelity_yield_raw, de_direction_reach
+from cell_eval2.metrics.discrimination import discrimination_score
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -31,6 +32,56 @@ from build_local_context import read_obs_column, read_var_names, stream_rows  # 
 from strategy_search import scaled  # noqa: E402
 
 logger = logging.getLogger("localscore")
+
+# Solved from two submissions on the vcc2026-val-*-r4 anchor set (docs/05 §1b).
+PDS_ANCHORS = (0.5001, 0.9698)
+
+
+def load_adata(path: str, genes, rows=None) -> ad.AnnData:
+    """Read an .h5ad's counts and `target` column into memory as CSR."""
+    labels = read_obs_column(path, "target")
+    rows = np.arange(labels.size) if rows is None else rows
+    blocks = [b for _, b in stream_rows(path, rows, block=8192)]
+    x = sp.vstack(blocks, format="csr").astype(np.float32)
+    del blocks
+    return ad.AnnData(
+        X=x,
+        obs=pd.DataFrame(
+            {"target": pd.Categorical(labels[rows])},
+            index=np.arange(rows.size).astype(str),
+        ),
+        var=pd.DataFrame(index=pd.Index(genes)),
+    )
+
+
+def perturbation_discrimination(pred: ad.AnnData, real: ad.AnnData) -> float:
+    """`pds_cosine`, read from the scorer's own implementation.
+
+    This project spent a submission on a hand-rolled surrogate -- the cosine rank
+    of the panel-mean-subtracted log2 fold changes -- which said a change would
+    raise `pds` when it cost 0.0996 of member score.  The real metric ranks in
+    `bulk_lognorm` space, drops EVERY panel target gene from the feature space
+    rather than each row's own, and breaks ties at the midrank.  None of those
+    are details: the surrogate was blind to exactly the thing that moved.
+    """
+    scores = discrimination_score(
+        pred=pred,
+        real=real,
+        pert_col="target",
+        control="non-targeting",
+        distance="cosine",
+        rank_denominator="n",
+        tie_policy="midrank",
+        exclude_target_gene=True,
+        exclusion_scope="panel",
+        control_source="pred",
+    )
+    return float(np.mean(list(scores.values())))
+
+
+def scaled_pds(raw: float) -> float:
+    b, r = PDS_ANCHORS
+    return (raw - b) / (r - b)
 
 
 def tables_to_arrays(real: pl.DataFrame, pred: pl.DataFrame):
@@ -64,6 +115,13 @@ def main() -> None:
     p.add_argument("--de-pred", default=None, help="reuse a table instead of recomputing")
     p.add_argument("--out-de-pred", default=None)
     p.add_argument(
+        "--pds",
+        action="store_true",
+        help="also compute pds_cosine with the scorer's own discrimination code; "
+        "needs both count matrices in memory but no DE",
+    )
+    p.add_argument("--skip-de", action="store_true", help="pds only")
+    p.add_argument(
         "--max-n-real",
         type=int,
         default=0,
@@ -72,6 +130,17 @@ def main() -> None:
         "panel of stronger knockdowns answers a different question.",
     )
     args = p.parse_args()
+
+    if args.pds:
+        genes = read_var_names(args.reference, None)
+        real = load_adata(args.reference, genes)
+        pred = load_adata(args.prediction, genes)
+        pds = perturbation_discrimination(pred, real)
+        del pred, real
+        logger.info("pds_cosine %.4f (scaled %+.4f)", pds, scaled_pds(pds))
+
+    if args.skip_de:
+        return
 
     if args.de_pred:
         pred_de = pl.read_parquet(args.de_pred)

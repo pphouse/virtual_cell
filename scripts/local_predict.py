@@ -137,6 +137,14 @@ def main() -> None:
         "of the generic response; needs --string-adj",
     )
     p.add_argument("--string-adj", default=None)
+    p.add_argument(
+        "--generic-weight",
+        type=float,
+        default=None,
+        help="mix the generic response in beside the target-specific one; each "
+        "component is put on unit scale first, so this is a ratio. Defaults to 1 "
+        "without --specific-lines and 0 with it.",
+    )
     p.add_argument("--gene-positions", default=None)
     p.add_argument("--proximity-weight", type=float, default=0.0)
     p.add_argument("--specific-shrink", type=float, default=0.0)
@@ -175,7 +183,11 @@ def main() -> None:
             n_calls=args.n_calls,
             margin=args.margin,
             top_margin=args.top_margin,
-            generic_weight=0.0 if args.specific_lines else 1.0,
+            generic_weight=(
+                args.generic_weight
+                if args.generic_weight is not None
+                else (0.0 if args.specific_lines else 1.0)
+            ),
             specific_weight=1.0 if args.specific_lines else 0.0,
             proximity_weight=args.proximity_weight,
             seed=args.seed,
