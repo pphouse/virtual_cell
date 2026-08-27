@@ -127,7 +127,7 @@ def test_mixing_actually_mixes():
     assert not np.array_equal(only.predict(["G3"]).call, _mixed(generic, specific).call)
 
 
-def test_magnitude_gamma_puts_the_target_into_the_sizes():
+def test_call_size_gamma_puts_the_target_into_the_sizes():
     """`pds` ranks a predicted profile against every real one, and a size that
     depends only on expression is the same coordinate for every target."""
     counts, genes = _context()
@@ -137,7 +137,7 @@ def test_magnitude_gamma_puts_the_target_into_the_sizes():
         BudgetConfig(n_calls=20, generic_weight=1.0), generic
     ).fit(counts, genes)
     graded = BudgetedPredictor(
-        BudgetConfig(n_calls=20, generic_weight=1.0, magnitude_gamma=1.0), generic
+        BudgetConfig(n_calls=20, generic_weight=1.0, call_size_gamma=1.0), generic
     ).fit(counts, genes)
     a, b = flat.predict(["G3"]), graded.predict(["G3"])
     # Same genes, same directions -- only the sizes move.
@@ -155,7 +155,7 @@ def test_a_graded_call_never_drops_below_its_threshold():
     cfg = dict(n_calls=25, generic_weight=1.0, top_margin=1.15, margin=1.15)
     flat = BudgetedPredictor(BudgetConfig(**cfg), generic).fit(counts, genes)
     graded = BudgetedPredictor(
-        BudgetConfig(**cfg, magnitude_gamma=1.5), generic
+        BudgetConfig(**cfg, call_size_gamma=1.5), generic
     ).fit(counts, genes)
     a, b = flat.predict(["G3"]), graded.predict(["G3"])
     called = a.call[0]

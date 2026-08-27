@@ -147,8 +147,8 @@ def main() -> None:
     )
     p.add_argument("--gene-positions", default=None)
     p.add_argument("--proximity-weight", type=float, default=0.0)
-    p.add_argument("--magnitude-gamma", type=float, default=0.0)
-    p.add_argument("--max-magnitude-scale", type=float, default=3.0)
+    p.add_argument("--call-size-gamma", type=float, default=0.0)
+    p.add_argument("--max-call-scale", type=float, default=3.0)
     p.add_argument("--specific-shrink", type=float, default=0.0)
     p.add_argument("--n-calls", type=int, default=BudgetConfig.n_calls)
     p.add_argument("--margin", type=float, default=BudgetConfig.margin)
@@ -192,8 +192,8 @@ def main() -> None:
             ),
             specific_weight=1.0 if args.specific_lines else 0.0,
             proximity_weight=args.proximity_weight,
-            magnitude_gamma=args.magnitude_gamma,
-            max_magnitude_scale=args.max_magnitude_scale,
+            call_size_gamma=args.call_size_gamma,
+            max_call_scale=args.max_call_scale,
             seed=args.seed,
         ),
         generic,

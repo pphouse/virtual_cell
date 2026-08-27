@@ -107,13 +107,13 @@ def parse_args() -> argparse.Namespace:
         help="budgeted mode: weight on the generic knockdown response",
     )
     p.add_argument(
-        "--magnitude-gamma",
+        "--call-size-gamma",
         type=float,
         default=0.0,
         help="budgeted mode: let the target's own ranking score set the size of its "
         "calls, not just their signs; 0 keeps the size a function of expression alone",
     )
-    p.add_argument("--max-magnitude-scale", type=float, default=3.0)
+    p.add_argument("--max-call-scale", type=float, default=3.0)
     p.add_argument(
         "--specific-weight",
         type=float,
@@ -179,8 +179,8 @@ def main() -> None:
             generic_weight=args.generic_weight,
             specific_weight=args.specific_weight,
             proximity_weight=args.proximity_weight,
-            magnitude_gamma=args.magnitude_gamma,
-            max_magnitude_scale=args.max_magnitude_scale,
+            call_size_gamma=args.call_size_gamma,
+            max_call_scale=args.max_call_scale,
             seed=args.seed,
         )
         transfer = _fit_transfer(args, bundle, library) if args.specific_weight else None
@@ -279,7 +279,7 @@ def main() -> None:
         "generic_weight": args.generic_weight,
         "specific_weight": args.specific_weight,
         "proximity_weight": args.proximity_weight,
-        "magnitude_gamma": args.magnitude_gamma,
+        "call_size_gamma": args.call_size_gamma,
         "knockdown_residual": args.knockdown_residual,
         "trans_beta": args.trans_beta,
         "alpha": args.alpha,

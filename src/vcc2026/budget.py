@@ -85,8 +85,8 @@ class BudgetConfig:
     proximity_weight: float = 0.0
     # How hard to let a target's own ranking score set the size of its calls, not
     # just their signs.  0 keeps the size a function of expression alone.
-    magnitude_gamma: float = 0.0
-    max_magnitude_scale: float = 3.0
+    call_size_gamma: float = 0.0
+    max_call_scale: float = 3.0
     propensity_coef: tuple[float, float, float, float] = field(default=PROPENSITY_COEF)
     seed: int = 0
 
@@ -232,7 +232,7 @@ class BudgetedPredictor:
             if take.size:
                 ramp = np.linspace(self.cfg.top_margin, self.cfg.margin, take.size)
                 scale = ramp / self.cfg.margin
-                if self.cfg.magnitude_gamma:
+                if self.cfg.call_size_gamma:
                     # The magnitude assigned to a call is otherwise a function of
                     # the gene's expression alone, so every target emits the same
                     # sizes and differs only in signs.  `pds` ranks a predicted
@@ -242,9 +242,9 @@ class BudgetedPredictor:
                     # threshold -- puts target-specific structure into the sizes.
                     rel = score[take] / max(float(np.median(score[take])), 1e-12)
                     scale = scale * np.clip(
-                        np.power(rel, self.cfg.magnitude_gamma),
+                        np.power(rel, self.cfg.call_size_gamma),
                         1.0,
-                        self.cfg.max_magnitude_scale,
+                        self.cfg.max_call_scale,
                     )
                 out[i, take] = (
                     sign[take] * self.magnitude[take] * scale * LN2
