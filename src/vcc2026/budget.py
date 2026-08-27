@@ -61,12 +61,6 @@ class BudgetConfig:
     min_cpm: float = 5.0
     max_abs_log2fc: float = 1.5
     min_abs_log2fc: float = 0.05
-    specific_weight: float = 0.0
-    generic_weight: float = 1.0
-    # Relative to the mean |signal|, how hard to pull a target's genomic
-    # neighbours toward silence. pds rises from 0.689 to 0.705 between 0 and 20
-    # and is flat above that, so the value is a plateau rather than a peak.
-    proximity_weight: float = 0.0
     # A target-specific signal, when there is one, is worth more than the generic
     # response: measured K562+RPE1 -> H1 (a different lab and a different line,
     # which is the transfer the challenge asks for), directional accuracy over
@@ -74,13 +68,25 @@ class BudgetConfig:
     # leads at every depth.  It is also the only part of the prediction that
     # differs between perturbations, so it is the only part `pds_cosine` can see.
     #
-    # Worth more is not worth instead.  The two carry different information, and
-    # on all three validation lines mixing them beats either alone at every ratio
-    # tried, by more than the proximity term is worth: against the specific signal
-    # on its own, a generic weight of 2 gains 0.016 of overall on K562, 0.045 on
-    # RPE1 and 0.030 on H1, with all five members agreeing in sign.  Weights are
-    # ratios -- each component is put on unit scale in `_score` before it is
-    # weighted -- so 2 means twice the generic, whatever units it arrived in.
+    # Mixing the generic response back in was measured on the leaderboard and it
+    # LOSES: at a generic weight of 2 the fidelity gain the panel promised was
+    # real (+0.022) and pds fell by 0.100, because a dominant shared component
+    # makes every target declare nearly the same genes and pds is a retrieval
+    # task over 300 of them.  Weights are ratios -- each component is put on unit
+    # scale in `_score` before it is weighted -- so 2 meant twice the generic,
+    # whatever units it arrived in.  Measured on K562 at the competition's panel
+    # size, pds falls monotonically in that ratio: 0.559 at 0, 0.559 at 0.25,
+    # 0.554 at 0.5, 0.540 at 1, 0.528 at 2.  Keep it at 0.
+    specific_weight: float = 0.0
+    generic_weight: float = 1.0
+    # Relative to the mean |signal|, how hard to pull a target's genomic
+    # neighbours toward silence. pds rises from 0.689 to 0.705 between 0 and 20
+    # and is flat above that, so the value is a plateau rather than a peak.
+    proximity_weight: float = 0.0
+    # How hard to let a target's own ranking score set the size of its calls, not
+    # just their signs.  0 keeps the size a function of expression alone.
+    magnitude_gamma: float = 0.0
+    max_magnitude_scale: float = 3.0
     propensity_coef: tuple[float, float, float, float] = field(default=PROPENSITY_COEF)
     seed: int = 0
 
@@ -226,6 +232,20 @@ class BudgetedPredictor:
             if take.size:
                 ramp = np.linspace(self.cfg.top_margin, self.cfg.margin, take.size)
                 scale = ramp / self.cfg.margin
+                if self.cfg.magnitude_gamma:
+                    # The magnitude assigned to a call is otherwise a function of
+                    # the gene's expression alone, so every target emits the same
+                    # sizes and differs only in signs.  `pds` ranks a predicted
+                    # profile against 300 real ones, and shared coordinates carry
+                    # no information for that.  Scaling by the target's own signal
+                    # -- never below 1, so a call stays above its significance
+                    # threshold -- puts target-specific structure into the sizes.
+                    rel = score[take] / max(float(np.median(score[take])), 1e-12)
+                    scale = scale * np.clip(
+                        np.power(rel, self.cfg.magnitude_gamma),
+                        1.0,
+                        self.cfg.max_magnitude_scale,
+                    )
                 out[i, take] = (
                     sign[take] * self.magnitude[take] * scale * LN2
                 ).astype(np.float32)

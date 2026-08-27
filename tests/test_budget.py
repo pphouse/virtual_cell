@@ -125,3 +125,39 @@ def test_mixing_actually_mixes():
         specific=_Constant(specific),
     ).fit(counts, genes)
     assert not np.array_equal(only.predict(["G3"]).call, _mixed(generic, specific).call)
+
+
+def test_magnitude_gamma_puts_the_target_into_the_sizes():
+    """`pds` ranks a predicted profile against every real one, and a size that
+    depends only on expression is the same coordinate for every target."""
+    counts, genes = _context()
+    rng = np.random.default_rng(7)
+    generic = rng.normal(size=genes.size)
+    flat = BudgetedPredictor(
+        BudgetConfig(n_calls=20, generic_weight=1.0), generic
+    ).fit(counts, genes)
+    graded = BudgetedPredictor(
+        BudgetConfig(n_calls=20, generic_weight=1.0, magnitude_gamma=1.0), generic
+    ).fit(counts, genes)
+    a, b = flat.predict(["G3"]), graded.predict(["G3"])
+    # Same genes, same directions -- only the sizes move.
+    assert np.array_equal(a.call, b.call)
+    assert np.array_equal(a.sign, b.sign)
+    assert not np.allclose(a.lfc, b.lfc)
+
+
+def test_a_graded_call_never_drops_below_its_threshold():
+    """Below the significance threshold a call simply does not happen, so the
+    grading is only ever allowed to make a call larger."""
+    counts, genes = _context()
+    rng = np.random.default_rng(8)
+    generic = rng.normal(size=genes.size)
+    cfg = dict(n_calls=25, generic_weight=1.0, top_margin=1.15, margin=1.15)
+    flat = BudgetedPredictor(BudgetConfig(**cfg), generic).fit(counts, genes)
+    graded = BudgetedPredictor(
+        BudgetConfig(**cfg, magnitude_gamma=1.5), generic
+    ).fit(counts, genes)
+    a, b = flat.predict(["G3"]), graded.predict(["G3"])
+    called = a.call[0]
+    assert (np.abs(b.lfc[0][called]) >= np.abs(a.lfc[0][called]) - 1e-9).all()
+    assert np.abs(b.lfc[0][called]).max() <= np.abs(a.lfc[0][called]).max() * 3.0 + 1e-9
