@@ -69,13 +69,22 @@ class _Specific:
         return out
 
 
-def specific_signal(lib, lines, string_adj, shrink, targets, control, genes):
+def specific_signal(
+    lib, lines, string_adj, shrink, targets, control, genes, model_config=None
+):
     """Fit the transfer model on `lines` and expose its delta on `genes`.
 
     The control block is only used for its mean profile, which is what the model
     reads as the context; it is the same block the significance threshold and the
     propensity come from, so nothing outside the reference enters the prediction.
+
+    `model_config` defaults to `ModelConfig()` -- the same defaults the submission
+    builder uses when it is not told otherwise.  It used to be a hardcoded variant
+    (100 neighbours at power 2 against the shipped 25 at power 3), which quietly
+    made every offline measurement a measurement of a different model.
     """
+    from dataclasses import replace
+
     import scipy.sparse as sp_
 
     from vcc2026.context import CellContext
@@ -92,15 +101,15 @@ def specific_signal(lib, lines, string_adj, shrink, targets, control, genes):
     feats = string_features(
         sp_.load_npz(string_adj), lib.genes, subset=sorted(set(targets) | set(sub.targets()))
     )
-    model = ContextTransferModel(
-        ModelConfig(
-            alpha=1.0,
-            n_components=30,
-            n_neighbours=100,
-            neighbour_power=2.0,
-            shared_shrink=shrink,
-        )
-    ).fit(sub, features=feats)
+    cfg = replace(model_config or ModelConfig(), shared_shrink=shrink)
+    logger.info(
+        "transfer model: %d components, %d neighbours, power %.1f, shrink %.2f",
+        cfg.n_components,
+        cfg.n_neighbours,
+        cfg.neighbour_power,
+        cfg.shared_shrink,
+    )
+    model = ContextTransferModel(cfg).fit(sub, features=feats)
     x, target_sum = normlog(control)
     mu_local = np.asarray(x.mean(axis=0)).ravel()
     index = {str(g): i for i, g in enumerate(genes)}
@@ -117,9 +126,20 @@ def specific_signal(lib, lines, string_adj, shrink, targets, control, genes):
 
 
 def _specific_signal(lib, args, targets, control, genes):
+    from vcc2026.model import ModelConfig
+
     lines = [x.strip() for x in args.specific_lines.split(",")]
+    d = ModelConfig()
+    cfg = ModelConfig(
+        alpha=args.alpha,
+        n_components=args.n_components or d.n_components,
+        n_neighbours=args.n_neighbours or d.n_neighbours,
+        neighbour_power=(
+            d.neighbour_power if args.neighbour_power is None else args.neighbour_power
+        ),
+    )
     return specific_signal(
-        lib, lines, args.string_adj, args.specific_shrink, targets, control, genes
+        lib, lines, args.string_adj, args.specific_shrink, targets, control, genes, cfg
     )
 
 
@@ -151,6 +171,10 @@ def main() -> None:
     p.add_argument("--max-call-scale", type=float, default=3.0)
     p.add_argument("--propensity-power", type=float, default=1.0)
     p.add_argument("--specific-shrink", type=float, default=0.0)
+    p.add_argument("--alpha", type=float, default=1.0)
+    p.add_argument("--n-components", type=int, default=None)
+    p.add_argument("--n-neighbours", type=int, default=None)
+    p.add_argument("--neighbour-power", type=float, default=None)
     p.add_argument("--n-calls", type=int, default=BudgetConfig.n_calls)
     p.add_argument("--margin", type=float, default=BudgetConfig.margin)
     p.add_argument("--top-margin", type=float, default=BudgetConfig.top_margin)
