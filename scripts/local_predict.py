@@ -149,6 +149,7 @@ def main() -> None:
     p.add_argument("--proximity-weight", type=float, default=0.0)
     p.add_argument("--call-size-gamma", type=float, default=0.0)
     p.add_argument("--max-call-scale", type=float, default=3.0)
+    p.add_argument("--propensity-power", type=float, default=1.0)
     p.add_argument("--specific-shrink", type=float, default=0.0)
     p.add_argument("--n-calls", type=int, default=BudgetConfig.n_calls)
     p.add_argument("--margin", type=float, default=BudgetConfig.margin)
@@ -194,6 +195,7 @@ def main() -> None:
             proximity_weight=args.proximity_weight,
             call_size_gamma=args.call_size_gamma,
             max_call_scale=args.max_call_scale,
+            propensity_power=args.propensity_power,
             seed=args.seed,
         ),
         generic,

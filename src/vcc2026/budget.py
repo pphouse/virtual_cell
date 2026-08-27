@@ -87,6 +87,11 @@ class BudgetConfig:
     # just their signs.  0 keeps the size a function of expression alone.
     call_size_gamma: float = 0.0
     max_call_scale: float = 3.0
+    # The propensity is the same for every target -- it is a property of the gene
+    # and the assay -- so the harder it is weighted, the more every target
+    # declares the same set, and `pds` is a retrieval task over 300 of them.
+    # Raising it to a power below one trades detectability for distinctness.
+    propensity_power: float = 1.0
     propensity_coef: tuple[float, float, float, float] = field(default=PROPENSITY_COEF)
     seed: int = 0
 
@@ -187,7 +192,12 @@ class BudgetedPredictor:
             # same thing whatever the transfer model happens to be emitting.
             unit = float(np.mean(np.abs(signal))) or 1.0
             signal = signal + self.cfg.proximity_weight * unit * self.proximity.weights(target)
-        return self.prop * np.abs(signal) * self.tested, np.sign(signal)
+        prop = (
+            self.prop
+            if self.cfg.propensity_power == 1.0
+            else np.power(self.prop, self.cfg.propensity_power)
+        )
+        return prop * np.abs(signal) * self.tested, np.sign(signal)
 
     def predict(self, targets: list[str]) -> BudgetedPrediction:
         """The call set, its direction, its confidence ordering and its magnitude.

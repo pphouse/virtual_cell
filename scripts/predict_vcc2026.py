@@ -114,6 +114,7 @@ def parse_args() -> argparse.Namespace:
         "calls, not just their signs; 0 keeps the size a function of expression alone",
     )
     p.add_argument("--max-call-scale", type=float, default=3.0)
+    p.add_argument("--propensity-power", type=float, default=1.0)
     p.add_argument(
         "--specific-weight",
         type=float,
@@ -181,6 +182,7 @@ def main() -> None:
             proximity_weight=args.proximity_weight,
             call_size_gamma=args.call_size_gamma,
             max_call_scale=args.max_call_scale,
+            propensity_power=args.propensity_power,
             seed=args.seed,
         )
         transfer = _fit_transfer(args, bundle, library) if args.specific_weight else None
@@ -280,6 +282,7 @@ def main() -> None:
         "specific_weight": args.specific_weight,
         "proximity_weight": args.proximity_weight,
         "call_size_gamma": args.call_size_gamma,
+        "propensity_power": args.propensity_power,
         "knockdown_residual": args.knockdown_residual,
         "trans_beta": args.trans_beta,
         "alpha": args.alpha,
