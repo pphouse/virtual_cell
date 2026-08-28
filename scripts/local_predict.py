@@ -70,7 +70,17 @@ class _Specific:
 
 
 def specific_signal(
-    lib, lines, string_adj, shrink, targets, control, genes, model_config=None
+    lib,
+    lines,
+    string_adj,
+    shrink,
+    targets,
+    control,
+    genes,
+    model_config=None,
+    features_npz=None,
+    feature_blend=None,
+    feature_topk=None,
 ):
     """Fit the transfer model on `lines` and expose its delta on `genes`.
 
@@ -98,9 +108,24 @@ def specific_signal(
         sub.deltas[line] = dict(lib.deltas[line])
         sub.n_cells[line] = dict(lib.n_cells.get(line, {}))
         sub.target_sum[line] = lib.target_sum.get(line, 1e4)
-    feats = string_features(
-        sp_.load_npz(string_adj), lib.genes, subset=sorted(set(targets) | set(sub.targets()))
-    )
+    subset = sorted(set(targets) | set(sub.targets()))
+    if features_npz:
+        from vcc2026.coessentiality import blend, load_features, neighbourhood
+
+        other = load_features(features_npz, subset=subset)
+        if feature_topk:
+            other = neighbourhood(other, feature_topk)
+        feats = (
+            other
+            if feature_blend is None
+            else blend(
+                string_features(sp_.load_npz(string_adj), lib.genes, subset=subset),
+                other,
+                feature_blend,
+            )
+        )
+    else:
+        feats = string_features(sp_.load_npz(string_adj), lib.genes, subset=subset)
     cfg = replace(model_config or ModelConfig(), shared_shrink=shrink)
     logger.info(
         "transfer model: %d components, %d neighbours, power %.1f, shrink %.2f",
@@ -139,7 +164,17 @@ def _specific_signal(lib, args, targets, control, genes):
         ),
     )
     return specific_signal(
-        lib, lines, args.string_adj, args.specific_shrink, targets, control, genes, cfg
+        lib,
+        lines,
+        args.string_adj,
+        args.specific_shrink,
+        targets,
+        control,
+        genes,
+        cfg,
+        features_npz=args.features,
+        feature_blend=args.feature_blend,
+        feature_topk=args.feature_topk,
     )
 
 
@@ -175,6 +210,26 @@ def main() -> None:
     p.add_argument("--n-components", type=int, default=None)
     p.add_argument("--n-neighbours", type=int, default=None)
     p.add_argument("--neighbour-power", type=float, default=None)
+    p.add_argument(
+        "--features",
+        default=None,
+        help="co-essentiality features npz (scripts/build_coessentiality.py); "
+        "replaces the STRING neighbourhood profile as the gene similarity",
+    )
+    p.add_argument(
+        "--feature-blend",
+        type=float,
+        default=None,
+        help="use BOTH similarities, with this weight on the co-essentiality block; "
+        "unset means --features replaces STRING outright",
+    )
+    p.add_argument(
+        "--feature-topk",
+        type=int,
+        default=None,
+        help="compare co-essentiality partner sets instead of raw fitness profiles, "
+        "keeping this many partners per gene",
+    )
     p.add_argument("--n-calls", type=int, default=BudgetConfig.n_calls)
     p.add_argument("--margin", type=float, default=BudgetConfig.margin)
     p.add_argument("--top-margin", type=float, default=BudgetConfig.top_margin)
