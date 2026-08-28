@@ -116,6 +116,18 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--max-call-scale", type=float, default=3.0)
     p.add_argument("--propensity-power", type=float, default=1.0)
     p.add_argument(
+        "--features",
+        default=None,
+        help="co-essentiality features npz (scripts/build_coessentiality.py)",
+    )
+    p.add_argument(
+        "--feature-blend",
+        type=float,
+        default=None,
+        help="use STRING and co-essentiality together, with this weight on the "
+        "co-essentiality block; unset means --features replaces STRING outright",
+    )
+    p.add_argument(
         "--specific-weight",
         type=float,
         default=0.0,
@@ -210,16 +222,8 @@ def main() -> None:
 
         features = None
         if args.string_adj:
-            import scipy.sparse as sp_
 
-            from vcc2026.network import string_features
-
-            adj = sp_.load_npz(args.string_adj)
-            # Only the rows actually queried are needed: the targets being
-            # predicted and the targets the library can transfer from. The full
-            # profile matrix would be 1.4 GB dense for no benefit.
-            needed = sorted(set(map(str, bundle.perturbations)) | set(library.targets()))
-            features = string_features(adj, bundle.genes, subset=needed)
+            features = _gene_features(args, bundle, library)
 
         model = ContextTransferModel(
             ModelConfig(
@@ -283,6 +287,7 @@ def main() -> None:
         "proximity_weight": args.proximity_weight,
         "call_size_gamma": args.call_size_gamma,
         "propensity_power": args.propensity_power,
+        "feature_blend": args.feature_blend,
         "knockdown_residual": args.knockdown_residual,
         "trans_beta": args.trans_beta,
         "alpha": args.alpha,
@@ -300,16 +305,40 @@ def main() -> None:
         write_vcc(out, args.vcc)
 
 
-def _fit_transfer(args, bundle, library):
-    """The CCDT model, fitted for use as the budgeted predictor's specific signal."""
+def _gene_features(args, bundle, library):
+    """The gene similarity the transfer model ranks neighbours by.
+
+    STRING's neighbourhood profile by default; `--features` adds DepMap's
+    co-essentiality, either replacing it or -- with `--feature-blend` -- beside
+    it.  Only the rows actually queried are built: the targets being predicted
+    and the targets the library can transfer from.  The full profile matrix
+    would be 1.4 GB dense for no benefit.
+    """
     import scipy.sparse as sp_
 
-    from vcc2026.model import ContextTransferModel
     from vcc2026.network import string_features
 
-    adj = sp_.load_npz(args.string_adj)
     needed = sorted(set(map(str, bundle.perturbations)) | set(library.targets()))
-    features = string_features(adj, bundle.genes, subset=needed)
+    if not args.features:
+        return string_features(sp_.load_npz(args.string_adj), bundle.genes, subset=needed)
+
+    from vcc2026.coessentiality import blend, load_features
+
+    other = load_features(args.features, subset=needed)
+    if args.feature_blend is None:
+        return other
+    return blend(
+        string_features(sp_.load_npz(args.string_adj), bundle.genes, subset=needed),
+        other,
+        args.feature_blend,
+    )
+
+
+def _fit_transfer(args, bundle, library):
+    """The CCDT model, fitted for use as the budgeted predictor's specific signal."""
+    from vcc2026.model import ContextTransferModel
+
+    features = _gene_features(args, bundle, library)
     return ContextTransferModel(
         ModelConfig(
             alpha=args.alpha,
