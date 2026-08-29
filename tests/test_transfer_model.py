@@ -154,3 +154,61 @@ def test_context_scale_matches_cell_evals_own_conversion(sim):
     assert np.abs(wrong.mu - ref_mean).mean() > 0.1, (
         "simulator depth happens to equal 1e4; the test cannot show the gap"
     )
+
+
+def _library_without(lib, hidden, drop_line):
+    trimmed = type(lib)(genes=lib.genes)
+    for line in lib.lines:
+        if line == drop_line:
+            continue
+        trimmed.baseline[line] = lib.baseline[line]
+        trimmed.deltas[line] = {t: d for t, d in lib.deltas[line].items() if t not in hidden}
+        trimmed.n_cells[line] = dict(lib.n_cells[line])
+    return trimmed
+
+
+def test_a_target_measured_elsewhere_ignores_the_similarity(sim):
+    """Why the panel understated the co-essentiality blend by twelve times.
+
+    A prediction is `b * d_direct + (1 - b) * d_knn`, and only `d_knn` reads the
+    gene similarity.  `b` is set by whether the *target itself* carries a
+    signature anywhere in the source library, so a target measured in another
+    line answers from its own rebased measurement and barely moves when the
+    similarity changes underneath it.
+
+    Every one of the offline panel's K562 targets, and 83% of RPE1's, is
+    measured in the lines left in the library, while none of the real panel's
+    300 are.  So the offline panel was scoring a regime the competition does not
+    have: it reported +0.0005 for a change that scored +0.0062 on two seeds
+    (`docs/08` 22, 23).  Holding each target's own signature out restores the
+    regime, and this test fails if that stops being true.
+    """
+    from vcc2026.features import GeneFeatures
+
+    _, targets, _, lib, ctx = sim
+    scored = sorted(targets)[:15]
+
+    rng = np.random.default_rng(0)
+    real = GeneFeatures(genes=lib.genes, matrix=rng.normal(size=(lib.genes.size, 8)))
+    real.matrix /= np.linalg.norm(real.matrix, axis=1, keepdims=True)
+    shuffled = GeneFeatures(genes=lib.genes, matrix=real.matrix[rng.permutation(lib.genes.size)])
+
+    def spread(library):
+        a, b = (
+            ContextTransferModel(ModelConfig()).fit(library, features=f).predict(scored, ctx)
+            for f in (real, shuffled)
+        )
+        # how far the two similarities drive the predictions apart, per target
+        num = np.linalg.norm(a.delta - b.delta, axis=1)
+        den = np.linalg.norm(a.delta, axis=1) + np.linalg.norm(b.delta, axis=1)
+        return float(np.mean(num / np.maximum(den, 1e-12)))
+
+    measured_elsewhere = _library_without(lib, hidden=set(), drop_line=HELD_OUT)
+    held_out = _library_without(lib, hidden=set(scored), drop_line=HELD_OUT)
+
+    diluted = spread(measured_elsewhere)
+    faithful = spread(held_out)
+    assert faithful > 2 * diluted, (
+        "holding the targets' own signatures out must expose the similarity: "
+        f"moved {faithful:.3f} held out against {diluted:.3f} left in"
+    )

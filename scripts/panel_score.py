@@ -204,6 +204,12 @@ def main() -> None:
     p.add_argument("--string-adj", default=None)
     p.add_argument("--specific-shrink", type=float, default=1.0)
     p.add_argument(
+        "--holdout-target-signatures",
+        action="store_true",
+        help="drop each panel target's own signature from the source lines; holding out "
+        "the scored line alone leaves the other line measuring the same genes",
+    )
+    p.add_argument(
         "--generic-from-library",
         action="store_true",
         help="take the generic response from the library rather than from the other panels' "
@@ -269,6 +275,7 @@ def main() -> None:
                 panel.targets,
                 panel.control,
                 panel.genes,
+                holdout_targets=panel.targets if args.holdout_target_signatures else None,
             )
         for label, cfg in arms.items():
             r = score(panel, cfg, generic, positions, specific)

@@ -81,6 +81,7 @@ def specific_signal(
     features_npz=None,
     feature_blend=None,
     feature_topk=None,
+    holdout_targets=None,
 ):
     """Fit the transfer model on `lines` and expose its delta on `genes`.
 
@@ -92,6 +93,17 @@ def specific_signal(
     builder uses when it is not told otherwise.  It used to be a hardcoded variant
     (100 neighbours at power 2 against the shipped 25 at power 3), which quietly
     made every offline measurement a measurement of a different model.
+
+    `holdout_targets` drops those genes from every source line, so no target being
+    predicted is measured anywhere in the library.  Holding out the scored *line*
+    is not enough: the panel's targets come from Replogle, so scoring K562 leaves
+    RPE1 holding a signature for all 300 of them, `w_obs > 0`, and the model
+    answers from the target's own rebased measurement instead of from the
+    similarity.  The real panel's 300 targets appear in no source screen at all,
+    so there every prediction comes from the neighbour arm.  Without this the
+    panel scores a regime the competition does not have, and dilutes any change
+    to the similarity by the confidence weight -- which is how it called the
+    co-essentiality blend at +0.0005 against a measured +0.0062 (`docs/08` 23).
     """
     from dataclasses import replace
 
@@ -102,12 +114,23 @@ def specific_signal(
     from vcc2026.network import string_features
     from vcc2026.normalize import normlog
 
+    drop = set(holdout_targets or ())
     sub = SignatureLibrary(genes=lib.genes)
     for line in lines:
         sub.baseline[line] = lib.baseline[line]
-        sub.deltas[line] = dict(lib.deltas[line])
-        sub.n_cells[line] = dict(lib.n_cells.get(line, {}))
+        sub.deltas[line] = {t: d for t, d in lib.deltas[line].items() if t not in drop}
+        sub.n_cells[line] = {
+            t: n for t, n in lib.n_cells.get(line, {}).items() if t not in drop
+        }
         sub.target_sum[line] = lib.target_sum.get(line, 1e4)
+    if drop:
+        kept = sum(len(sub.deltas[ln]) for ln in lines)
+        held = sum(len(lib.deltas[ln]) for ln in lines) - kept
+        logger.info(
+            "held out %d target signatures from the source lines (%d left as neighbours)",
+            held,
+            kept,
+        )
     subset = sorted(set(targets) | set(sub.targets()))
     if features_npz:
         from vcc2026.coessentiality import blend, load_features, neighbourhood
@@ -175,6 +198,7 @@ def _specific_signal(lib, args, targets, control, genes):
         features_npz=args.features,
         feature_blend=args.feature_blend,
         feature_topk=args.feature_topk,
+        holdout_targets=targets if args.holdout_target_signatures else None,
     )
 
 
@@ -222,6 +246,14 @@ def main() -> None:
         default=None,
         help="use BOTH similarities, with this weight on the co-essentiality block; "
         "unset means --features replaces STRING outright",
+    )
+    p.add_argument(
+        "--holdout-target-signatures",
+        action="store_true",
+        help="drop the scored targets' own signatures from the source lines, so every "
+        "prediction comes from the similarity as it does on the real panel, whose 300 "
+        "targets appear in no source screen; without this the panel answers from the "
+        "target's own rebased measurement and dilutes any similarity change",
     )
     p.add_argument(
         "--feature-topk",
