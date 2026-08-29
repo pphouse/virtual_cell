@@ -132,21 +132,33 @@ def specific_signal(
             kept,
         )
     subset = sorted(set(targets) | set(sub.targets()))
-    if features_npz:
+    # --features/--feature-blend may be given more than once, so a run can stack
+    # several kinds of similarity: each extra block is blended onto whatever is
+    # built so far, at its own weight.  A single --features with no weight still
+    # means "replace STRING outright", which is how the co-essentiality-only
+    # arms in `docs/08` 20 were measured.
+    paths = [features_npz] if isinstance(features_npz, str) else list(features_npz or ())
+    weights = [feature_blend] if not isinstance(feature_blend, list) else list(feature_blend)
+    if paths and len(weights) not in (0, len(paths)):
+        raise ValueError(
+            f"{len(paths)} feature files but {len(weights)} blend weights -- "
+            "give one weight per file, or none at all to replace STRING"
+        )
+    if paths:
         from vcc2026.coessentiality import blend, load_features, neighbourhood
 
-        other = load_features(features_npz, subset=subset)
-        if feature_topk:
-            other = neighbourhood(other, feature_topk)
-        feats = (
-            other
-            if feature_blend is None
-            else blend(
-                string_features(sp_.load_npz(string_adj), lib.genes, subset=subset),
-                other,
-                feature_blend,
-            )
-        )
+        extra = []
+        for path in paths:
+            block = load_features(path, subset=subset)
+            extra.append(neighbourhood(block, feature_topk) if feature_topk else block)
+        if not weights or weights[0] is None:
+            if len(extra) > 1:
+                raise ValueError("blend weights are required when stacking several --features")
+            feats = extra[0]
+        else:
+            feats = string_features(sp_.load_npz(string_adj), lib.genes, subset=subset)
+            for block, weight in zip(extra, weights, strict=True):
+                feats = blend(feats, block, weight)
     else:
         feats = string_features(sp_.load_npz(string_adj), lib.genes, subset=subset)
     cfg = replace(model_config or ModelConfig(), shared_shrink=shrink)
@@ -236,16 +248,19 @@ def main() -> None:
     p.add_argument("--neighbour-power", type=float, default=None)
     p.add_argument(
         "--features",
+        action="append",
         default=None,
-        help="co-essentiality features npz (scripts/build_coessentiality.py); "
-        "replaces the STRING neighbourhood profile as the gene similarity",
+        help="a gene-similarity features npz (scripts/build_coessentiality.py, "
+        "scripts/build_tissue_features.py); repeat to stack several kinds. "
+        "Alone and without a weight it replaces the STRING neighbourhood profile",
     )
     p.add_argument(
         "--feature-blend",
         type=float,
+        action="append",
         default=None,
-        help="use BOTH similarities, with this weight on the co-essentiality block; "
-        "unset means --features replaces STRING outright",
+        help="keep STRING and add each --features block at this weight; give one "
+        "weight per --features. Unset means a lone --features replaces STRING outright",
     )
     p.add_argument(
         "--holdout-target-signatures",

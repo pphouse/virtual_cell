@@ -13,12 +13,15 @@ lines.  Each profile is centred and L2-normalised here, so the cosine the model
 takes is that correlation.  Lines that did not screen a gene leave NaN; those
 entries become 0 after centring, which is the neutral contribution.
 
-This is the one representation left to try.  The co-expression of a context's
-own control cells was measured and carries nothing (`coexpression.py`), and
-every knob on the STRING representation -- confidence threshold, neighbour
-count, neighbour weighting, low-rank width -- was swept against `pds` at the
-competition's panel size and none of them agreed in sign across two cell lines
-(`docs/08` §17).
+This is the representation that worked.  The co-expression of a context's own
+control cells was measured and carries nothing (`coexpression.py`); every knob
+on the STRING representation -- confidence threshold, neighbour count,
+neighbour weighting, low-rank width -- was swept against `pds` and none of them
+agreed in sign across two cell lines, on the diluted panel and again on the
+fixed one (`docs/08` 17, 25); and the tissue expression profile, tried after
+this one, is real but redundant beside it (`tissue.py`, `docs/08` 26).  Blended
+with STRING at weight 1.0 this was worth +0.0062 of Overall, measured on two
+seeds against two seed-matched controls (`docs/08` 22).
 """
 
 from __future__ import annotations
