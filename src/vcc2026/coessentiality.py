@@ -107,11 +107,22 @@ def blend(a: GeneFeatures, b: GeneFeatures, weight: float) -> GeneFeatures:
     both = np.hstack([left, float(weight) * right])
     norms = np.linalg.norm(both, axis=1, keepdims=True)
     norms[norms == 0] = 1.0
+    # A cosine over the result is (cos_a + weight**2 * cos_b) / (1 + weight**2)
+    # wherever both sources place the gene, so `weight` is not the block's share
+    # of the similarity -- and nesting one blend inside another compounds that.
+    # Two calls at weight 1.0 leave the newest block with half the similarity and
+    # the first two with a quarter each, which is not what "add a third block"
+    # sounds like; it cost this project a section of wrong reasoning
+    # (`docs/08` 27).  Report the shares so the arithmetic is visible.
+    share_b = weight**2 / (1.0 + weight**2)
     logger.info(
-        "blended features: %d genes, %d from both sources, weight %.2f",
+        "blended features: %d genes, %d from both sources, weight %.2f "
+        "(new block takes %.0f%% of the similarity, everything before it %.0f%%)",
         genes.size,
         int(sum(1 for g in genes if g in ai and g in bi)),
-        weight,
+        float(weight),
+        100 * share_b,
+        100 * (1 - share_b),
     )
     return GeneFeatures(genes=np.asarray(genes, dtype=object), matrix=both / norms)
 
