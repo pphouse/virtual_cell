@@ -86,6 +86,24 @@ class BudgetConfig:
     # How hard to let a target's own ranking score set the size of its calls, not
     # just their signs.  0 keeps the size a function of expression alone.
     call_size_gamma: float = 0.0
+    # How much of a call's magnitude comes from the model's own predicted fold
+    # change rather than from the gene's expression.  At 0 the size is a function
+    # of expression alone and the model contributes only signs and an ordering,
+    # which was the right call while the predictions were extrapolated from gene
+    # similarity and carried no trustworthy magnitude.  With a measured signature
+    # behind 267 of the 300 targets (`docs/08` 32) the magnitude is real, and a
+    # gene whose true response is 2 log2 is currently emitted at about 0.24.
+    # The predicted size is floored at the significance magnitude so a call never
+    # drops below the threshold that makes it a call at all.
+    predicted_magnitude: float = 0.0
+    # Whether a predicted size is floored at the significance magnitude.  With the
+    # floor a call always stays testable, but the model's own sizes are almost
+    # always *below* the threshold, so the floor wins everywhere and the knob does
+    # nothing (`docs/08` 37).  Without it the honest size is emitted and the call
+    # may fall out of the DE set: `nmae` is scored over the real side's genes
+    # whether or not the prediction called them, so it can gain what `jac`,
+    # `fid` and `reach` lose.
+    predicted_magnitude_floor: bool = True
     max_call_scale: float = 3.0
     # The propensity is the same for every target -- it is a property of the gene
     # and the assay -- so the harder it is weighted, the more every target
@@ -256,9 +274,18 @@ class BudgetedPredictor:
                         1.0,
                         self.cfg.max_call_scale,
                     )
-                out[i, take] = (
-                    sign[take] * self.magnitude[take] * scale * LN2
-                ).astype(np.float32)
+                size = self.magnitude[take] * scale
+                if self.cfg.predicted_magnitude and specific is not None:
+                    own_size = np.abs(specific[i][take])
+                    target_size = (
+                        np.maximum(own_size, size)
+                        if self.cfg.predicted_magnitude_floor
+                        else own_size
+                    )
+                    size = (1.0 - self.cfg.predicted_magnitude) * size + (
+                        self.cfg.predicted_magnitude
+                    ) * target_size
+                out[i, take] = (sign[take] * size * LN2).astype(np.float32)
         return BudgetedPrediction(lfc=out, key=key, sign=direction, call=call)
 
     def predict_lfc(self, targets: list[str]) -> np.ndarray:

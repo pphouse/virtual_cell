@@ -107,6 +107,19 @@ def parse_args() -> argparse.Namespace:
         help="budgeted mode: weight on the generic knockdown response",
     )
     p.add_argument(
+        "--no-magnitude-floor",
+        action="store_true",
+        help="let a predicted size fall below the significance magnitude, trading "
+        "the DE-set members for log-fold-change accuracy",
+    )
+    p.add_argument(
+        "--predicted-magnitude",
+        type=float,
+        default=0.0,
+        help="how much of a call's size comes from the model's own predicted fold "
+        "change rather than from the gene's expression (0 = expression alone)",
+    )
+    p.add_argument(
         "--call-size-gamma",
         type=float,
         default=0.0,
@@ -193,6 +206,8 @@ def main() -> None:
             specific_weight=args.specific_weight,
             proximity_weight=args.proximity_weight,
             call_size_gamma=args.call_size_gamma,
+            predicted_magnitude=args.predicted_magnitude,
+            predicted_magnitude_floor=not args.no_magnitude_floor,
             max_call_scale=args.max_call_scale,
             propensity_power=args.propensity_power,
             seed=args.seed,

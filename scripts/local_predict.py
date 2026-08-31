@@ -238,6 +238,19 @@ def main() -> None:
     )
     p.add_argument("--gene-positions", default=None)
     p.add_argument("--proximity-weight", type=float, default=0.0)
+    p.add_argument(
+        "--no-magnitude-floor",
+        action="store_true",
+        help="let a predicted size fall below the significance magnitude, trading "
+        "the DE-set members for log-fold-change accuracy",
+    )
+    p.add_argument(
+        "--predicted-magnitude",
+        type=float,
+        default=0.0,
+        help="how much of a call's size comes from the model's own predicted fold "
+        "change rather than from the gene's expression (0 = expression alone)",
+    )
     p.add_argument("--call-size-gamma", type=float, default=0.0)
     p.add_argument("--max-call-scale", type=float, default=3.0)
     p.add_argument("--propensity-power", type=float, default=1.0)
@@ -320,6 +333,8 @@ def main() -> None:
             specific_weight=1.0 if args.specific_lines else 0.0,
             proximity_weight=args.proximity_weight,
             call_size_gamma=args.call_size_gamma,
+            predicted_magnitude=args.predicted_magnitude,
+            predicted_magnitude_floor=not args.no_magnitude_floor,
             max_call_scale=args.max_call_scale,
             propensity_power=args.propensity_power,
             seed=args.seed,
