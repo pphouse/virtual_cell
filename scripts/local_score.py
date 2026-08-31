@@ -97,8 +97,21 @@ def tables_to_arrays(real: pl.DataFrame, pred: pl.DataFrame):
         t = df["target"].to_numpy()
         f = df["feature"].to_numpy()
         keep = np.array([x in pi for x in t]) & np.array([x in gi for x in f])
-        rows = np.array([pi[x] for x in t[keep]])
-        cols = np.array([gi[x] for x in f[keep]])
+        if not keep.any():
+            # An empty selection makes np.array([]) a float array, and indexing
+            # with it raises IndexError three frames down rather than saying what
+            # is wrong.  It means the DE truth and the prediction share no
+            # target -- normally a reference rebuilt from a different split than
+            # the one the truth was computed on, which is exactly how the H1 arm
+            # broke when it was restored from the validation rather than the
+            # training release.
+            raise ValueError(
+                f"no target in common: the table has {len(set(t))} targets and the "
+                f"reference {len(pi)}. Recompute the DE truth for this reference "
+                "with scripts/local_reference_de.py"
+            )
+        rows = np.array([pi[x] for x in t[keep]], dtype=np.int64)
+        cols = np.array([gi[x] for x in f[keep]], dtype=np.int64)
         lfc[rows, cols] = df["log2_fold_change"].to_numpy()[keep]
         padj[rows, cols] = df["p_adj"].to_numpy()[keep]
         return lfc, np.nan_to_num(padj, nan=1.0)
