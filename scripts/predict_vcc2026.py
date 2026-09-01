@@ -306,6 +306,16 @@ def main() -> None:
         "knockdown_residual": args.knockdown_residual,
         "trans_beta": args.trans_beta,
         "alpha": args.alpha,
+        # Recorded because a submission has to be reproducible from its manifest.
+        # These were missing, so two builds that differed only in the component
+        # count wrote byte-identical JSON and looked like the flag had been
+        # ignored -- the .vcc sizes were the only evidence it had not.
+        "n_components": args.n_components,
+        "n_neighbours": args.n_neighbours,
+        "neighbour_power": args.neighbour_power,
+        "shared_shrink": args.shared_shrink,
+        "predicted_magnitude": args.predicted_magnitude,
+        "magnitude_floor": not args.no_magnitude_floor,
         "pseudocount": args.pseudocount,
         "min_abs_lfc": args.min_abs_lfc,
         "trans_similarity_floor": args.trans_similarity_floor,
