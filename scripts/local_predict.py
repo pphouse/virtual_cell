@@ -197,6 +197,9 @@ def _specific_signal(lib, args, targets, control, genes):
         neighbour_power=(
             d.neighbour_power if args.neighbour_power is None else args.neighbour_power
         ),
+        confidence_prior=(
+            d.confidence_prior if args.confidence_prior is None else args.confidence_prior
+        ),
     )
     return specific_signal(
         lib,
@@ -256,6 +259,14 @@ def main() -> None:
     p.add_argument("--propensity-power", type=float, default=1.0)
     p.add_argument("--specific-shrink", type=float, default=0.0)
     p.add_argument("--alpha", type=float, default=1.0)
+    p.add_argument(
+        "--confidence-prior",
+        type=float,
+        default=None,
+        help="how much measured weight a target needs before its own rebased "
+        "signature outweighs the neighbour average (b = w/(w+prior)); it was set "
+        "when no production target had a signature at all",
+    )
     p.add_argument("--n-components", type=int, default=None)
     p.add_argument("--n-neighbours", type=int, default=None)
     p.add_argument("--neighbour-power", type=float, default=None)

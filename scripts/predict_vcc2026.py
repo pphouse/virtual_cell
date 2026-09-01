@@ -53,6 +53,14 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--knockdown-residual", type=float, default=ControlOnlyConfig.knockdown_residual)
     p.add_argument("--trans-beta", type=float, default=ControlOnlyConfig.trans_beta)
     p.add_argument(
+        "--confidence-prior",
+        type=float,
+        default=None,
+        help="how much measured weight a target needs before its own rebased "
+        "signature outweighs the neighbour average (b = w/(w+prior)); it was set "
+        "when no production target had a signature at all",
+    )
+    p.add_argument(
         "--n-components",
         type=int,
         default=None,
@@ -311,6 +319,7 @@ def main() -> None:
         # count wrote byte-identical JSON and looked like the flag had been
         # ignored -- the .vcc sizes were the only evidence it had not.
         "n_components": args.n_components,
+        "confidence_prior": args.confidence_prior,
         "n_neighbours": args.n_neighbours,
         "neighbour_power": args.neighbour_power,
         "shared_shrink": args.shared_shrink,
@@ -368,6 +377,11 @@ def _fit_transfer(args, bundle, library):
         ModelConfig(
             alpha=args.alpha,
             n_components=args.n_components or ModelConfig.n_components,
+            confidence_prior=(
+                ModelConfig.confidence_prior
+                if args.confidence_prior is None
+                else args.confidence_prior
+            ),
             n_neighbours=args.n_neighbours,
             magnitude_gamma=args.magnitude_gamma,
             neighbour_power=args.neighbour_power,
