@@ -67,7 +67,7 @@ DynaVelo の `preprocessing/joint_rna_motif_analysis.ipynb` に合わせた。
 scVelo の流線は TCM → ナイーブ方向を向き、潜在時間もナイーブが後期になる。
 静止期 PBMC の RNA 速度が信頼できないのは既知の問題で、ここでも再現している。
 
-![scVelo の流線](dynavelo/figures/scvelo_stream_celltype.png)
+![scVelo の流線](dynavelo/figures/run1/scvelo_stream_celltype.png)
 
 ### 2.3 ATAC 前処理と chromVAR（`dynavelo/02_prep_atac_chromvar.py`）
 
@@ -137,8 +137,8 @@ RUNX のモチーフ活性）に引かれて反転した形。潜在時間の範
 
 **context A が乗るナイーブ側は、速度の一致が最も悪い**（CD4 Naive 0.644、Treg 0.656）。
 
-![潜在時間](dynavelo/figures/dynavelo_latent_time.png)
-![DynaVelo の流線](dynavelo/figures/dynavelo_stream.png)
+![潜在時間](dynavelo/figures/run1/dynavelo_latent_time.png)
+![DynaVelo の流線](dynavelo/figures/run1/dynavelo_stream.png)
 
 モチーフ速度の絶対値が大きい TF: JUN、BATF、BNC2、FOSL2、FOS、BACH1、BACH2、TBX21、MGA、NFE2L2、
 RUNX1、ZEB1、TCF7L2、TCF4、RORA。AP-1 系はどの細胞種でも上昇中、TCF 系は低下中と出る。

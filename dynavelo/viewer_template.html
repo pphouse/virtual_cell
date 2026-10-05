@@ -64,14 +64,14 @@ small,.small{color:var(--text2);font-size:12px}
 </head>
 <body>
 <div class="wrap">
-<h1>DynaVelo × PBMC マルチオーム（VCC context A 対応細胞）</h1>
-<p class="sub">10x PBMC マルチオームの T/NK クラスター（cluster 0・3）で DynaVelo を新規学習し、VCC 2026 の context A に最も近い細胞の上で全モデル遺伝子の in-silico ノックダウンを行った結果。数値はすべてこのページに埋め込み済みで、オフラインで開ける。</p>
+<h1 id="h1">DynaVelo × PBMC マルチオーム（VCC context A 対応細胞）</h1>
+<p class="sub" id="intro">10x PBMC マルチオームの T/NK クラスター（cluster 0・3）で DynaVelo を新規学習し、VCC 2026 の context A に最も近い細胞の上で全モデル遺伝子の in-silico ノックダウンを行った結果。数値はすべてこのページに埋め込み済みで、オフラインで開ける。</p>
 
 <div class="grid kpis" id="kpis"></div>
 <div class="note"><b>結論</b>：学習と速度・潜在時間の推定は正常に動いたが、in-silico ノックダウンの出力は <b>効果が極小</b>（発現変化の最大値 <span id="k_max"></span>、log1p 空間）で、<b>ほぼ 1 方向</b>（上位 1,000 摂動の分散の <span id="k_pc1"></span> が第 1 主成分）に潰れている。単独では VCC の予測として使えず、補助特徴量としての利用が現実的。</div>
 
 <h2>1. 細胞マップ</h2>
-<p class="sub">UMAP 上の 5,225 細胞。色の意味をセレクタで切り替える。点にカーソルを置くと細胞ごとの値が出る。</p>
+<p class="sub">UMAP 上の全細胞。色の意味をセレクタで切り替える。点にカーソルを置くと細胞ごとの値が出る。</p>
 <div class="grid g2">
   <div class="card">
     <div class="ctrl">
@@ -125,7 +125,7 @@ small,.small{color:var(--text2);font-size:12px}
   </div>
   <div class="card">
     <h3>摂動を選んで見る</h3>
-    <div class="ctrl"><input id="q" placeholder="遺伝子名で検索（例: LEF1）" size="24"><label><input type="checkbox" id="tfOnly"> モチーフ TF のみ</label></div>
+    <div class="ctrl"><input id="q" placeholder="遺伝子名で検索（例: LEF1）" size="24"><label><input type="checkbox" id="tfOnly"> モチーフ TF のみ</label><label id="tgWrap" hidden><input type="checkbox" id="tgOnly"> VCC 標的のみ</label></div>
     <div class="scroll" style="max-height:230px;overflow-y:auto"><table id="pt"></table></div>
     <div id="detail" style="margin-top:12px"></div>
   </div>
@@ -135,7 +135,7 @@ small,.small{color:var(--text2);font-size:12px}
 <div class="grid g2">
   <div class="card">
     <h3>TF ノックダウンによる潜在時間の変化（細胞種別）</h3>
-    <p class="small">全 5,225 細胞で実行。単位は潜在時間 × 10⁻³。<span class="sw" style="background:var(--div-neg)"></span>早まる（未分化側）<span class="sw" style="background:var(--div-pos);margin-left:8px"></span>進む。変化が大きい 30 TF。</p>
+    <p class="small">全細胞で実行。単位は潜在時間 × 10⁻³。<span class="sw" style="background:var(--div-neg)"></span>早まる（未分化側）<span class="sw" style="background:var(--div-pos);margin-left:8px"></span>進む。変化が大きい 30 TF。</p>
     <div class="scroll" id="hmKO"></div>
   </div>
   <div class="card">
@@ -144,6 +144,9 @@ small,.small{color:var(--text2);font-size:12px}
     <div class="scroll" id="hmMV"></div>
   </div>
 </div>
+
+<div id="figs"></div>
+<div id="extra"></div>
 
 <h2>5. 読むときの注意</h2>
 <div class="card">
@@ -267,12 +270,12 @@ bars($('#pcNeg'), D.pc1.neg, 'var(--div-neg)'); bars($('#pcPos'), D.pc1.pos, 'va
 
 let sortKey = 'norm', sel = P.gene.indexOf('LEF1');
 function drawTable(){
-  const q = $('#q').value.trim().toUpperCase(), tf = $('#tfOnly').checked;
-  let idx = [...Array(NP).keys()].filter(i => (!q || P.gene[i].toUpperCase().includes(q)) && (!tf || P.tf[i]));
+  const q = $('#q').value.trim().toUpperCase(), tf = $('#tfOnly').checked, tg = $('#tgOnly').checked;
+  let idx = [...Array(NP).keys()].filter(i => (!q || P.gene[i].toUpperCase().includes(q)) && (!tf || P.tf[i]) && (!tg || P.target[i]));
   idx.sort((a,b) => Math.abs(P[sortKey][b]) - Math.abs(P[sortKey][a])); const shown = idx.slice(0,60);
   const cols = [['norm','効果ノルム'],['self','自身の変化'],['dt','潜在時間Δ'],['frac','発現割合'],['cpc1','PC1 との cos']];
   $('#pt').innerHTML = '<thead><tr><th>遺伝子</th>' + cols.map(([k,l])=>`<th class="sortable" data-k="${k}">${l}${k===sortKey?' ▼':''}</th>`).join('') + '</tr></thead><tbody>' +
-    shown.map(i=>`<tr class="click${i===sel?' sel':''}" data-i="${i}"><td>${P.gene[i]}${P.tf[i]?' <small>TF</small>':''}</td>${cols.map(([k])=>`<td>${P[k][i]}</td>`).join('')}</tr>`).join('') +
+    shown.map(i=>`<tr class="click${i===sel?' sel':''}" data-i="${i}"><td>${P.gene[i]}${P.tf[i]?' <small>TF</small>':''}${P.target&&P.target[i]?' <small>標的</small>':''}</td>${cols.map(([k])=>`<td>${P[k][i]}</td>`).join('')}</tr>`).join('') +
     `</tbody>`;
   $('#pt').querySelectorAll('th.sortable').forEach(th => th.onclick = () => { sortKey = th.dataset.k; drawTable(); });
   $('#pt').querySelectorAll('tr.click').forEach(tr => tr.onclick = () => selectPert(+tr.dataset.i));
@@ -281,7 +284,13 @@ function selectPert(i){ sel = i; drawTable(); const t = P.top[i];
   $('#detail').innerHTML = `<h3>${P.gene[i]} をノックダウン</h3><p class="small">他遺伝子への効果ノルム ${P.norm[i]}・自身の変化 ${P.self[i]}・潜在時間の変化 ${P.dt[i]}（いずれも ×10⁻³）</p>
     <div class="grid" style="grid-template-columns:1fr 1fr;gap:16px"><div><small>下がる遺伝子</small><div class="bars" id="dN"></div></div><div><small>上がる遺伝子</small><div class="bars" id="dP"></div></div></div>`;
   bars($('#dN'), t[0].map((j,k)=>[P.gene[j], t[1][k]]), 'var(--div-neg)'); bars($('#dP'), t[2].map((j,k)=>[P.gene[j], t[3][k]]), 'var(--div-pos)'); }
-$('#q').oninput = drawTable; $('#tfOnly').onchange = drawTable;
+$('#q').oninput = drawTable; $('#tfOnly').onchange = drawTable; $('#tgOnly').onchange = drawTable;
+if (P.target) $('#tgWrap').hidden = false;
+if (D.meta && D.meta.title){ document.title = D.meta.title; $('#h1').textContent = D.meta.title; $('#intro').textContent = D.meta.intro; }
+if (D.meta && D.meta.figs) $('#figs').innerHTML = '<h2>図</h2><p class="sub">scVelo と DynaVelo の速度流線・潜在時間、学習曲線。クリックで原寸表示。</p><div class="grid g2" style="align-items:start">' +
+  D.meta.figs.map(f => `<figure class="card" style="margin:0"><a href="${f.src}" target="_blank" rel="noopener"><img src="${f.src}" alt="${f.cap}" loading="lazy" style="max-width:100%;height:auto;border-radius:6px;background:#fff"></a><figcaption class="small" style="margin-top:6px">${f.cap}</figcaption></figure>`).join('') + '</div>';
+if (D.extra) $('#extra').innerHTML = D.extra.map(sec => `<h2>${sec.title}</h2><p class="sub">${sec.text}</p><div class="grid g2">` +
+  sec.tables.map(t => `<div class="card"><h3>${t.title}</h3><p class="small">${t.note||''}</p><div class="scroll"><table><thead><tr>${t.cols.map(c=>`<th>${c}</th>`).join('')}</tr></thead><tbody>${t.rows.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table></div></div>`).join('') + '</div>').join('');
 
 /* ---------- heatmaps ---------- */
 function heat(el, rows, cols, M, unit){

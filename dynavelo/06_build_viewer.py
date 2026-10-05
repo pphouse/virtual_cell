@@ -11,8 +11,11 @@ import anndata as ad
 import scanpy as sc
 
 ROOT = '/home/azureuser/vcc'
-OUT = f'{ROOT}/results'
+import os
+OUT = os.environ.get('DV_OUT', f'{ROOT}/results')
 template, out_html = sys.argv[1], sys.argv[2]
+# optional: JSON with {meta: {title, intro}, extra: [...sections]} merged into the viewer data
+extra_json = sys.argv[3] if len(sys.argv) > 3 else None
 
 
 def r(a, n=3):
@@ -39,9 +42,9 @@ ct_table = [dict(celltype=c, n=int(g.size()[c]), lt=round(float(g['latent_time_m
             for c in cts]
 
 # ---- training log
-log = pd.read_csv(glob.glob(f'{ROOT}/DynaVelo/log/PBMC_cluster0_3_*.log')[0], sep='\t')
-train = dict(epoch=log['Epoch'].astype(int).tolist(), loss_train=r(log['loss_train'], 0), loss_test=r(log['loss_test'], 0),
-             vel_cos=r(-log['loss_vel'], 4), nll_x=r(log['nll_x'], 0), nll_y=r(log['nll_y'], 0))
+log = pd.read_csv(f'{OUT}/training_log.csv')  # per-epoch values parsed from the training stdout
+train = dict(epoch=log['epoch'].astype(int).tolist(), loss_train=r(log['loss_train'], 0), loss_test=r(log['loss_test'], 0),
+             vel_cos=r(log['velocity_cosine_test'], 4), nll_x=r(log['nll_x_test'], 0), nll_y=r(log['nll_y_test'], 0))
 
 # ---- perturbations (context A weighted)
 p = ad.read_h5ad(f'{OUT}/contextA_dynavelo_perturbation.h5ad')
@@ -71,12 +74,18 @@ pert = dict(
     norm=r(norm * 1e3, 2), self=r(self_dx * 1e3, 2), dt=r(p.obs['delta_latent_time'] * 1e3, 2),
     pc1=r(scores[:, 0] * 1e3, 2), pc2=r(scores[:, 1] * 1e3, 2), cpc1=r(cosine_pc1, 2), top=top,
 )
+import os  # noqa: E402
+_tf = f'{ROOT}/vcc_sp/targets300.txt'
+if os.path.exists(_tf):
+    _t = {l.strip() for l in open(_tf)}
+    pert['target'] = [int(g in _t) for g in genes]
 Pn = D[k] / np.linalg.norm(D[k], axis=1, keepdims=True)
 C = np.abs(Pn @ Pn.T)
 stats = dict(
     n_cells=int(rna.n_obs), n_genes=int(rna.n_vars), n_tfs=int(p.obsm['delta_motif_velocity'].shape[1]),
-    n_vel_genes=int(m.sum()), epochs=int(log['Epoch'].max()), vel_cos=round(float(cos.mean()), 3),
+    n_vel_genes=int(m.sum()), epochs=int(log['epoch'].max()), vel_cos=round(float(cos.mean()), 3),
     lt_spearman=round(float(pd.Series(o['latent_time_mean']).corr(o['latent_time_scvelo'], method='spearman')), 3),
+    n_targets=int(sum(pert.get('target', []))),
     nA_total=18400, nA_kept=int(o['n_contextA_cells'].sum()), nA_pbmc=int((o['n_contextA_cells'] > 0).sum()),
     max_abs_dx=round(float(np.abs(np.array(p.X)).max()), 4), var_exp=r(var_exp, 3),
     mean_abs_cos=round(float(C[np.triu_indices(len(k), 1)].mean()), 3),
@@ -98,7 +107,11 @@ mv = vy.groupby('ct', observed=True).mean().loc[cts]
 mtop = mv.abs().max(0).sort_values(ascending=False).index[:25]
 motif = dict(tfs=list(mtop), cts=cts, v=[r(mv[x].values, 3) for x in mtop])
 
-data = dict(cts=cts, cells=cells, ct_table=ct_table, train=train, pert=pert, pc1=pc1, stats=stats, tfko=tfko, motif=motif)
+if extra_json:
+    _e = json.load(open(extra_json, encoding='utf-8'))
+else:
+    _e = {}
+data = dict(meta=_e.get('meta'), extra=_e.get('extra'), cts=cts, cells=cells, ct_table=ct_table, train=train, pert=pert, pc1=pc1, stats=stats, tfko=tfko, motif=motif)
 blob = json.dumps(data, separators=(',', ':'), ensure_ascii=False)
 html = open(template, encoding='utf-8').read().replace('/*__DATA__*/null', blob)
 open(out_html, 'w', encoding='utf-8').write(html)

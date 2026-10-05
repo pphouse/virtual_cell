@@ -1,0 +1,6 @@
+{"meta": {"figs": [
+ {"src": "figures/run1/scvelo_stream_celltype.png", "cap": "scVelo の速度流線（細胞種）。TCM → ナイーブ方向を向く"},
+ {"src": "figures/run1/dynavelo_stream.png", "cap": "DynaVelo の速度流線（細胞種）"},
+ {"src": "figures/run1/dynavelo_latent_time.png", "cap": "左から細胞種、DynaVelo 潜在時間、scVelo 潜在時間"},
+ {"src": "figures/run1/scvelo_latent_time.png", "cap": "scVelo の潜在時間"},
+ {"src": "training/training_curves.png", "cap": "学習曲線。青が 1 回目（このページ）、橙が 2 回目"}]}}
