@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DynaVelo × VCC 2026 — 結果</title>
+<style>
+:root{color-scheme:light;--bg:#f6f6f4;--surface:#fcfcfb;--border:#e2e1dc;--text:#0b0b0b;--text2:#52514e;--link:#1c5cab}
+@media (prefers-color-scheme:dark){:root{color-scheme:dark;--bg:#121211;--surface:#1a1a19;--border:#33332f;--text:#fff;--text2:#c3c2b7;--link:#86b6ef}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.7 system-ui,-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif}
+.wrap{max-width:860px;margin:0 auto;padding:32px 16px 64px}
+h1{font-size:24px;margin:0 0 6px} h2{font-size:17px;margin:32px 0 8px}
+p{color:var(--text2);margin:0 0 12px;max-width:70ch}
+a{color:var(--link)}
+.grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr))}
+.card{display:block;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px;text-decoration:none;color:var(--text)}
+.card b{display:block;font-size:16px;margin-bottom:4px}
+.card span{color:var(--text2);font-size:13px}
+a.card:hover{border-color:var(--link)}
+table{border-collapse:collapse;width:100%;font-size:14px;font-variant-numeric:tabular-nums}
+th,td{padding:6px 10px;text-align:right;border-bottom:1px solid var(--border)} th:first-child,td:first-child{text-align:left} th{color:var(--text2)}
+img{max-width:100%;height:auto;border-radius:8px;background:#fff;border:1px solid var(--border)}
+ul{color:var(--text2);padding-left:20px;margin:0}
+</style>
+</head>
+<body><div class="wrap">
+<h1>DynaVelo × Virtual Cell Challenge 2026</h1>
+<p>10x PBMC マルチオームの T/NK 細胞（5,225 細胞）で <a href="https://github.com/karbalayghareh/DynaVelo">DynaVelo</a> を学習し、VCC 2026 の context A に近い細胞の上で in-silico ノックダウンを行った結果。</p>
+
+<h2>ビューワー</h2>
+<div class="grid">
+<a class="card" href="viewer.html"><b>1 回目の学習</b><span>3,381 遺伝子 × 171 TF・143 エポック。細胞マップ、学習曲線、全遺伝子ノックダウン、TF ヒートマップ、図</span></a>
+<a class="card" href="viewer_run2.html"><b>2 回目の学習（VCC 標的入り）</b><span>3,625 遺伝子 × 189 TF・84 エポック。本番 300 標的を含む。遺伝子特徴の検証と H1 代理スコア</span></a>
+</div>
+
+<h2>結論</h2>
+<ul>
+<li>学習と速度・潜在時間の推定は正常に動いた。潜在時間はナイーブ → TCM → エフェクターの順。</li>
+<li>in-silico ノックダウンは効果が極小で、ほぼ 1 方向に潰れる。単独では VCC の予測にならない。</li>
+<li>遺伝子類似度の特徴として既存モデル（v25）に足すと、H1 代理スコアは 4 シードすべてで悪化した（平均 −0.0072）。提出には使っていない。</li>
+</ul>
+
+<h2>2 回の学習</h2>
+<table>
+<thead><tr><th></th><th>1 回目</th><th>2 回目</th></tr></thead>
+<tbody>
+<tr><td>モデル遺伝子</td><td>3,381</td><td>3,625</td></tr>
+<tr><td>TF モチーフ</td><td>171</td><td>189</td></tr>
+<tr><td>本番 300 標的のカバー</td><td>85</td><td>300</td></tr>
+<tr><td>保存されたチェックポイント</td><td>エポック 133</td><td>エポック 74</td></tr>
+<tr><td>テストの速度コサイン</td><td>0.711</td><td>0.666</td></tr>
+</tbody></table>
+
+<h2>学習曲線</h2>
+<a href="training/training_curves.png"><img src="training/training_curves.png" alt="1 回目と 2 回目の学習曲線"></a>
+<p style="margin-top:8px">エポックごとの値: <a href="training/training_log_v1.csv">1 回目 (CSV)</a>・<a href="training/training_log_v2.csv">2 回目 (CSV)</a></p>
+
+<h2>レポートとデータ</h2>
+<ul>
+<li><a href="https://github.com/pphouse/virtual_cell/blob/claude/virtual-cell-challenge-2026-erxb1k/docs/11-DynaVelo%E3%81%AE%E5%AE%9F%E8%A1%8C%E7%B5%90%E6%9E%9C.md">レポート: 1 回目の学習と提出の判定</a></li>
+<li><a href="https://github.com/pphouse/virtual_cell/blob/claude/virtual-cell-challenge-2026-erxb1k/docs/12-DynaVelo%E3%81%AE2%E5%9B%9E%E7%9B%AE%E3%81%AE%E5%AD%A6%E7%BF%92.md">レポート: 2 回目の学習</a></li>
+<li><a href="https://github.com/pphouse/virtual_cell/tree/claude/virtual-cell-challenge-2026-erxb1k/docs/dynavelo/results">結果ファイル（h5ad・学習済みモデル・遺伝子特徴）</a></li>
+<li><a href="https://github.com/pphouse/virtual_cell/tree/claude/virtual-cell-challenge-2026-erxb1k/dynavelo">再現用スクリプト</a></li>
+<li>表: <a href="contextA_perturbation_summary.csv">1 回目のノックダウン要約 (CSV)</a>・<a href="tf_perturbation_by_celltype.csv">TF × 細胞種 (CSV)</a></li>
+</ul>
+</div></body></html>

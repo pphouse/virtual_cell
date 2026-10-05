@@ -1,0 +1,27 @@
+{
+ "n_cells": 5225,
+ "n_genes": 3381,
+ "n_tfs": 171,
+ "n_vel_genes": 392,
+ "epochs": 143,
+ "vel_cos": 0.734,
+ "lt_spearman": -0.456,
+ "nA_total": 18400,
+ "nA_kept": 18343,
+ "nA_pbmc": 466,
+ "max_abs_dx": 0.0185,
+ "var_exp": [
+  0.843,
+  0.081,
+  0.054,
+  0.01,
+  0.003,
+  0.002,
+  0.001,
+  0.001
+ ],
+ "mean_abs_cos": 0.693,
+ "corr_norm_expr": 0.66,
+ "self_neg_frac": 0.623,
+ "self_mean": -9e-05
+}
