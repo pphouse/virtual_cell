@@ -36,6 +36,7 @@ v0→v1 の悪化が最も有益だった: **DE 系 4 指標は yield（有意�
 | **[`docs/09-引き継ぎ.md`](docs/09-引き継ぎ.md)** | **何を測り終えたか・次に何をすべきか（まずこれ）** |
 | **[`docs/10-提出とログインの手順.md`](docs/10-提出とログインの手順.md)** | **認証・環境再構築・ビルド・提出のランブック** |
 | [`docs/11-DynaVeloの実行結果.md`](docs/11-DynaVeloの実行結果.md) | DynaVelo を PBMC マルチオームで学習し context A 対応細胞で in-silico ノックダウンした結果（[ビューワー](docs/dynavelo/viewer.html)） |
+| [`docs/12-DynaVeloの2回目の学習.md`](docs/12-DynaVeloの2回目の学習.md) | VCC 標的を遺伝子セットに入れた再学習の結果。公開ページ: <https://pphouse.github.io/virtual_cell/> |
 
 ## 手法
 
