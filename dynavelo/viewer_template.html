@@ -60,6 +60,8 @@ svg .lab{fill:var(--text)}
 .hm th{font-weight:400;font-size:11px;border:0;padding:2px 6px}
 .hm th.col{writing-mode:vertical-rl;transform:rotate(180deg);text-align:left;height:110px;vertical-align:bottom}
 small,.small{color:var(--text2);font-size:12px}
+#extra td{white-space:normal}
+#extra td:first-child{white-space:nowrap}
 </style>
 </head>
 <body>
@@ -68,7 +70,7 @@ small,.small{color:var(--text2);font-size:12px}
 <p class="sub" id="intro">10x PBMC マルチオームの T/NK クラスター（cluster 0・3）で DynaVelo を新規学習し、VCC 2026 の context A に最も近い細胞の上で全モデル遺伝子の in-silico ノックダウンを行った結果。数値はすべてこのページに埋め込み済みで、オフラインで開ける。</p>
 
 <div class="grid kpis" id="kpis"></div>
-<div class="note"><b>結論</b>：学習と速度・潜在時間の推定は正常に動いたが、in-silico ノックダウンの出力は <b>効果が極小</b>（発現変化の最大値 <span id="k_max"></span>、log1p 空間）で、<b>ほぼ 1 方向</b>（上位 1,000 摂動の分散の <span id="k_pc1"></span> が第 1 主成分）に潰れている。単独では VCC の予測として使えず、補助特徴量としての利用が現実的。</div>
+<div class="note" id="noteMain"><b>結論</b>：学習と速度・潜在時間の推定は正常に動いたが、in-silico ノックダウンの出力は <b>効果が極小</b>（発現変化の最大値 <span id="k_max"></span>、log1p 空間）で、<b>ほぼ 1 方向</b>（上位 1,000 摂動の分散の <span id="k_pc1"></span> が第 1 主成分）に潰れている。単独では VCC の予測として使えず、補助特徴量としての利用が現実的。</div>
 
 <h2>1. 細胞マップ</h2>
 <p class="sub">UMAP 上の全細胞。色の意味をセレクタで切り替える。点にカーソルを置くと細胞ごとの値が出る。</p>
@@ -102,6 +104,7 @@ small,.small{color:var(--text2);font-size:12px}
   <div class="card"><h3>損失</h3><div class="legend"><span><i class="sw" style="background:var(--s1)"></i>訓練</span><span><i class="sw" style="background:var(--s2)"></i>テスト</span></div><div id="chLoss"></div></div>
 </div>
 
+<div id="sec3">
 <h2>3. in-silico ノックダウン（context A 対応細胞）</h2>
 <p class="sub">各遺伝子の発現（TF ならモチーフ z-score も）を全細胞中の最小値に置き換え、デコードされた発現の変化を context A 対応細胞で重み付け平均した。単位は log1p 発現 × 10⁻³。</p>
 <div class="grid g2">
@@ -131,10 +134,12 @@ small,.small{color:var(--text2);font-size:12px}
   </div>
 </div>
 
+</div>
+
 <h2>4. 転写因子</h2>
 <div class="grid g2">
   <div class="card">
-    <h3>TF ノックダウンによる潜在時間の変化（細胞種別）</h3>
+    <h3 id="hKO">TF ノックダウンによる潜在時間の変化（細胞種別）</h3>
     <p class="small">全細胞で実行。単位は潜在時間 × 10⁻³。<span class="sw" style="background:var(--div-neg)"></span>早まる（未分化側）<span class="sw" style="background:var(--div-pos);margin-left:8px"></span>進む。変化が大きい 30 TF。</p>
     <div class="scroll" id="hmKO"></div>
   </div>
@@ -181,11 +186,11 @@ $('#kpis').innerHTML = [
   [S.n_cells.toLocaleString(), '細胞（QC 後）'], [S.n_genes.toLocaleString(), 'モデル遺伝子'], [S.n_tfs, 'TF モチーフ'],
   [S.epochs, '学習エポック'], [fmt(S.vel_cos,2), '速度コサイン（平均）'], [S.nA_kept.toLocaleString(), 'context A 細胞をカバー'],
 ].map(([b,s]) => `<div class="card kpi"><b>${b}</b><span>${s}</span></div>`).join('');
-$('#k_max').textContent = S.max_abs_dx; $('#k_pc1').textContent = Math.round(S.var_exp[0]*100) + '%';
-$('#k_sp').textContent = S.lt_spearman; $('#k_corr').textContent = S.corr_norm_expr;
+if (D.pert){ $('#k_max').textContent = S.max_abs_dx; $('#k_pc1').textContent = Math.round(S.var_exp[0]*100) + '%'; } else { $('#noteMain').hidden = true; $('#sec3').hidden = true; }
+$('#k_sp').textContent = S.lt_spearman; if (D.pert) $('#k_corr').textContent = S.corr_norm_expr;
 $('#k_ng').textContent = S.n_genes.toLocaleString(); $('#k_nv').textContent = S.n_vel_genes;
 $('#k_nA').textContent = S.nA_kept.toLocaleString(); $('#k_nP').textContent = S.nA_pbmc;
-$('#k_self').textContent = Math.round(S.self_neg_frac*100) + '%';
+if (D.pert) $('#k_self').textContent = Math.round(S.self_neg_frac*100) + '%'; else $('#k_self').closest('li').hidden = true;
 
 /* ---------- generic canvas scatter with hover ---------- */
 function scatter(cv, pts, opt){
@@ -256,7 +261,7 @@ function lineChart(el, x, series, yd){
 }
 
 /* ---------- perturbations ---------- */
-const P = D.pert, NP = P.gene.length;
+const P = D.pert || {gene:[]}, NP = P.gene.length;
 function drawPert(){
   scatter($('#pcs'), P.gene.map((g,i)=>({x:P.pc1[i], y:P.pc2[i], c:P.tf[i]?css('--s1'):css('--dim'), z:P.tf[i], r:P.tf[i]?3:2})),
     {axes:true, equal:true, xd:0, yd:0, xl:'PC1 スコア (×10⁻³)', yl:'PC2', tip:i=>pertTip(i), click:i=>selectPert(i)});
@@ -266,7 +271,7 @@ function drawPert(){
 const pertTip = i => `<b>${P.gene[i]}</b>${P.tf[i]?' · モチーフ TF':''}<br>効果ノルム ${P.norm[i]}<br>発現細胞の割合 ${fmt(P.frac[i],2)}<br>潜在時間の変化 ${P.dt[i]}<br><small>クリックで詳細</small>`;
 function bars(el, rows, color){ const mx = Math.max(...rows.map(r=>Math.abs(r[1])));
   el.innerHTML = rows.map(r=>`<span>${r[0]}</span><span><i class="b" style="display:block;width:${Math.abs(r[1])/mx*100}%;background:${color}"></i></span><span>${r[1]>0?'+':''}${r[1]}</span>`).join(''); }
-bars($('#pcNeg'), D.pc1.neg, 'var(--div-neg)'); bars($('#pcPos'), D.pc1.pos, 'var(--div-pos)');
+if (D.pc1){ bars($('#pcNeg'), D.pc1.neg, 'var(--div-neg)'); bars($('#pcPos'), D.pc1.pos, 'var(--div-pos)'); }
 
 let sortKey = 'norm', sel = P.gene.indexOf('LEF1');
 function drawTable(){
@@ -301,14 +306,14 @@ function heat(el, rows, cols, M, unit){
 }
 
 function drawAll(){
-  drawUmap(); drawPert(); drawTable(); selectPert(sel);
+  drawUmap(); if (D.pert){ drawPert(); drawTable(); selectPert(sel); }
   lineChart($('#chVel'), D.train.epoch, [{n:'コサイン', y:D.train.vel_cos, c:'var(--s1)'}], 2);
   lineChart($('#chLoss'), D.train.epoch, [{n:'訓練', y:D.train.loss_train, c:'var(--s1)'}, {n:'テスト', y:D.train.loss_test, c:'var(--s2)'}], 0);
-  heat($('#hmKO'), D.tfko.tfs, D.tfko.cts, D.tfko.dlt, '×10⁻³');
+  if (D.tfko) heat($('#hmKO'), D.tfko.tfs, D.tfko.cts, D.tfko.dlt, '×10⁻³'); else $('#hKO').closest('.card').hidden = true;
   heat($('#hmMV'), D.motif.tfs, D.motif.cts, D.motif.v, '');
 }
 drawAll();
-let rt; addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { drawUmap(); drawPert(); }, 150); });
+let rt; addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { drawUmap(); if (D.pert) drawPert(); }, 150); });
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', drawAll);
 </script>
 </body>
