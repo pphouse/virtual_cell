@@ -50,7 +50,10 @@ sc.pp.filter_cells(adata, min_counts=1000)
 adata = adata[:, ~adata.var_names.isin(['MALAT1'])].copy()
 print('after cell filtering:', adata.shape)
 
-scv.pp.filter_and_normalize(adata, min_shared_counts=10)
+# genes we must be able to perturb (challenge targets) survive the spliced/unspliced filter
+_wanted_file = f'{ROOT}/data/vcc_target_genes.txt'
+_retain = [g for g in (l.strip() for l in open(_wanted_file)) if g in adata.var_names] if os.path.exists(_wanted_file) else None
+scv.pp.filter_and_normalize(adata, min_shared_counts=10, retain_genes=_retain)
 sc.pp.log1p(adata)
 adata.layers['X_log'] = adata.X.copy()
 sc.pp.highly_variable_genes(adata, n_top_genes=N_HVG, flavor='seurat')
