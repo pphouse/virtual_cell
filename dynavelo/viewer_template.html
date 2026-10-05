@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DynaVelo × PBMC (VCC context A) 結果ビューワー</title>
+<style>
+:root{
+  color-scheme:light;
+  --bg:#f6f6f4;--surface:#fcfcfb;--border:#e2e1dc;--text:#0b0b0b;--text2:#52514e;--muted:#8a8983;
+  --s1:#2a78d6;--s2:#eb6834;--seq-lo:#cde2fb;--seq-hi:#0d366b;--div-neg:#2a78d6;--div-pos:#e34948;--div-mid:#f0efec;
+  --dim:#d9d8d2;--grid:#e9e8e3;--warn-bg:#fff4e0;--warn-bd:#eda100;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  color-scheme:dark;
+  --bg:#121211;--surface:#1a1a19;--border:#33332f;--text:#fff;--text2:#c3c2b7;--muted:#8a8983;
+  --s1:#3987e5;--s2:#d95926;--seq-lo:#0d366b;--seq-hi:#cde2fb;--div-neg:#3987e5;--div-pos:#e66767;--div-mid:#383835;
+  --dim:#3a3a37;--grid:#2a2a28;--warn-bg:#2e2513;--warn-bd:#c98500;
+}}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#121211;--surface:#1a1a19;--border:#33332f;--text:#fff;--text2:#c3c2b7;--muted:#8a8983;
+  --s1:#3987e5;--s2:#d95926;--seq-lo:#0d366b;--seq-hi:#cde2fb;--div-neg:#3987e5;--div-pos:#e66767;--div-mid:#383835;
+  --dim:#3a3a37;--grid:#2a2a28;--warn-bg:#2e2513;--warn-bd:#c98500;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.6 system-ui,-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif}
+.wrap{max-width:1180px;margin:0 auto;padding:24px 16px 64px}
+h1{font-size:22px;margin:0 0 4px}
+h2{font-size:17px;margin:40px 0 4px}
+h3{font-size:14px;margin:0 0 2px}
+.sub{color:var(--text2);margin:0 0 12px;max-width:75ch}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px}
+.grid{display:grid;gap:12px}
+.g2{grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr))}
+.kpis{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+.kpi b{display:block;font-size:24px;line-height:1.2;font-variant-numeric:tabular-nums}
+.kpi span{color:var(--text2);font-size:12px}
+.note{background:var(--warn-bg);border-left:3px solid var(--warn-bd);padding:10px 14px;border-radius:6px;margin:12px 0}
+.ctrl{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;margin-bottom:8px;color:var(--text2);font-size:13px}
+select,input{font:inherit;color:var(--text);background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:4px 8px}
+canvas{width:100%;display:block;border-radius:6px}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:13px;font-variant-numeric:tabular-nums}
+th,td{padding:5px 8px;text-align:right;border-bottom:1px solid var(--border);white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+th{color:var(--text2);font-weight:600;cursor:default}
+th.sortable{cursor:pointer}
+tbody tr.click{cursor:pointer}
+tbody tr.click:hover,tbody tr.sel{background:var(--grid)}
+#tip{position:fixed;pointer-events:none;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:6px 9px;font-size:12px;box-shadow:0 2px 8px rgba(0,0,0,.18);z-index:9;max-width:280px}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--text2);margin:6px 0}
+.sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+.ramp{display:inline-block;width:120px;height:8px;border-radius:4px;vertical-align:middle;margin:0 6px}
+svg text{fill:var(--text2);font-size:11px}
+svg .lab{fill:var(--text)}
+.bars{display:grid;grid-template-columns:auto 1fr auto;gap:3px 8px;align-items:center;font-size:12px}
+.bars .b{height:10px;border-radius:0 4px 4px 0;min-width:1px}
+.hm td{padding:0;border:1px solid var(--surface);width:44px;height:20px}
+.hm th{font-weight:400;font-size:11px;border:0;padding:2px 6px}
+.hm th.col{writing-mode:vertical-rl;transform:rotate(180deg);text-align:left;height:110px;vertical-align:bottom}
+small,.small{color:var(--text2);font-size:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>DynaVelo × PBMC マルチオーム（VCC context A 対応細胞）</h1>
+<p class="sub">10x PBMC マルチオームの T/NK クラスター（cluster 0・3）で DynaVelo を新規学習し、VCC 2026 の context A に最も近い細胞の上で全モデル遺伝子の in-silico ノックダウンを行った結果。数値はすべてこのページに埋め込み済みで、オフラインで開ける。</p>
+
+<div class="grid kpis" id="kpis"></div>
+<div class="note"><b>結論</b>：学習と速度・潜在時間の推定は正常に動いたが、in-silico ノックダウンの出力は <b>効果が極小</b>（発現変化の最大値 <span id="k_max"></span>、log1p 空間）で、<b>ほぼ 1 方向</b>（上位 1,000 摂動の分散の <span id="k_pc1"></span> が第 1 主成分）に潰れている。単独では VCC の予測として使えず、補助特徴量としての利用が現実的。</div>
+
+<h2>1. 細胞マップ</h2>
+<p class="sub">UMAP 上の 5,225 細胞。色の意味をセレクタで切り替える。点にカーソルを置くと細胞ごとの値が出る。</p>
+<div class="grid g2">
+  <div class="card">
+    <div class="ctrl">
+      <label>色 <select id="colorBy">
+        <option value="lt">DynaVelo 潜在時間</option>
+        <option value="lts">scVelo 潜在時間</option>
+        <option value="cos">速度コサイン（scVelo vs DynaVelo）</option>
+        <option value="nA">context A 対応細胞数</option>
+        <option value="ct">細胞種を 1 つ強調</option>
+      </select></label>
+      <label id="ctPickWrap" hidden>細胞種 <select id="ctPick"></select></label>
+    </div>
+    <canvas id="umap" height="420"></canvas>
+    <div class="legend" id="umapLegend"></div>
+  </div>
+  <div class="card">
+    <h3>細胞種ごとの要約</h3>
+    <p class="small">潜在時間は細胞種平均。「context A」は対応表でその細胞種に割り当たった context A 細胞の数（括弧内は受け皿になった PBMC 細胞数）。</p>
+    <div class="scroll"><table id="ctTable"></table></div>
+    <p class="small" style="margin-top:10px">DynaVelo の潜在時間はナイーブ → TCM → エフェクター/MAIT の順に進む。scVelo の潜在時間は逆向き（ナイーブが後期）で、両者の Spearman 相関は <b id="k_sp"></b>。</p>
+  </div>
+</div>
+
+<h2>2. 学習の経過</h2>
+<p class="sub">既定ハイパーパラメータ、バッチ 128、テスト 10%。テスト損失が 10 エポック改善しなかった時点で停止した。</p>
+<div class="grid g2">
+  <div class="card"><h3>速度の一致度（テスト、コサイン類似度）</h3><p class="small">scVelo の速度が推定できた遺伝子だけで評価。1 に近いほど一致。</p><div id="chVel"></div></div>
+  <div class="card"><h3>損失</h3><div class="legend"><span><i class="sw" style="background:var(--s1)"></i>訓練</span><span><i class="sw" style="background:var(--s2)"></i>テスト</span></div><div id="chLoss"></div></div>
+</div>
+
+<h2>3. in-silico ノックダウン（context A 対応細胞）</h2>
+<p class="sub">各遺伝子の発現（TF ならモチーフ z-score も）を全細胞中の最小値に置き換え、デコードされた発現の変化を context A 対応細胞で重み付け平均した。単位は log1p 発現 × 10⁻³。</p>
+<div class="grid g2">
+  <div class="card">
+    <h3>摂動プロファイルの第 1・第 2 主成分</h3>
+    <p class="small">1 点 = 1 摂動。両軸は同じ縮尺。効果の大きい摂動ほど横（PC1）方向にだけ伸び、縦にはほとんど広がらない = どの遺伝子を落としても同じ方向に動く。大半の摂動は原点付近（効果ほぼゼロ）。</p>
+    <canvas id="pcs" height="340"></canvas>
+    <div class="legend"><span><i class="sw" style="background:var(--s1)"></i>モチーフ TF</span><span><i class="sw" style="background:var(--dim)"></i>その他の遺伝子</span></div>
+  </div>
+  <div class="card">
+    <h3>効果の大きさ vs 摂動遺伝子の発現量</h3>
+    <p class="small">縦軸は他遺伝子への効果のノルム。発現が高い遺伝子ほど効果が大きい（相関 <b id="k_corr"></b>）＝制御関係より「入力をどれだけ動かしたか」を反映。</p>
+    <canvas id="nx" height="340"></canvas>
+  </div>
+</div>
+<div class="grid g2" style="margin-top:12px">
+  <div class="card">
+    <h3>第 1 主成分の中身</h3>
+    <p class="small">正の向き（多くの摂動が進む向き）で下がる遺伝子と上がる遺伝子。ナイーブ T 細胞プログラムの低下とエフェクター遺伝子の上昇。</p>
+    <div class="grid" style="grid-template-columns:1fr 1fr;gap:16px"><div><small>下がる</small><div class="bars" id="pcNeg"></div></div><div><small>上がる</small><div class="bars" id="pcPos"></div></div></div>
+  </div>
+  <div class="card">
+    <h3>摂動を選んで見る</h3>
+    <div class="ctrl"><input id="q" placeholder="遺伝子名で検索（例: LEF1）" size="24"><label><input type="checkbox" id="tfOnly"> モチーフ TF のみ</label></div>
+    <div class="scroll" style="max-height:230px;overflow-y:auto"><table id="pt"></table></div>
+    <div id="detail" style="margin-top:12px"></div>
+  </div>
+</div>
+
+<h2>4. 転写因子</h2>
+<div class="grid g2">
+  <div class="card">
+    <h3>TF ノックダウンによる潜在時間の変化（細胞種別）</h3>
+    <p class="small">全 5,225 細胞で実行。単位は潜在時間 × 10⁻³。<span class="sw" style="background:var(--div-neg)"></span>早まる（未分化側）<span class="sw" style="background:var(--div-pos);margin-left:8px"></span>進む。変化が大きい 30 TF。</p>
+    <div class="scroll" id="hmKO"></div>
+  </div>
+  <div class="card">
+    <h3>モチーフ速度（細胞種平均）</h3>
+    <p class="small">DynaVelo が推定したモチーフ活性の時間変化。<span class="sw" style="background:var(--div-neg)"></span>低下中<span class="sw" style="background:var(--div-pos);margin-left:8px"></span>上昇中。絶対値が大きい 25 TF。</p>
+    <div class="scroll" id="hmMV"></div>
+  </div>
+</div>
+
+<h2>5. 読むときの注意</h2>
+<div class="card">
+<ul style="margin:0;padding-left:20px">
+<li>DynaVelo の配布チェックポイントはマウス用で遺伝子セットが異なるため使えず、このデータで新規学習した。</li>
+<li>scVelo の速度が推定できたのはモデル遺伝子 <span id="k_ng"></span> 個中 <span id="k_nv"></span> 個だけで、速度の教師信号は薄い。静止期の PBMC では RNA 速度そのものの信頼性が低い。</li>
+<li>context A との対応は 2 次元 UMAP 上の最近傍で、<span id="k_nA"></span> 細胞が <span id="k_nP"></span> 個の PBMC 細胞に集中している。</li>
+<li>ノックダウンした遺伝子自身の発現が下がったのは <span id="k_self"></span> だけ。標的自身の低下は別途入れる必要がある。</li>
+<li>学習データは非摂動の初代 T 細胞。CRISPRi 応答を再現できるかは未検証。</li>
+</ul>
+</div>
+</div>
+<div id="tip" hidden></div>
+
+<script>
+const D = /*__DATA__*/null;
+const $ = s => document.querySelector(s), css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const tip = $('#tip');
+function showTip(e, html){ tip.innerHTML = html; tip.hidden = false;
+  const w = tip.offsetWidth, x = e.clientX + 14 + w > innerWidth ? e.clientX - w - 10 : e.clientX + 14;
+  tip.style.left = x + 'px'; tip.style.top = (e.clientY + 12) + 'px'; }
+const hideTip = () => tip.hidden = true;
+const hex = h => [1,3,5].map(i => parseInt(h.slice(i,i+2),16));
+const mix = (a,b,t) => { const A=hex(a),B=hex(b); return `rgb(${A.map((v,i)=>Math.round(v+(B[i]-v)*t)).join(',')})`; };
+const seq = t => mix(css('--seq-lo'), css('--seq-hi'), Math.max(0,Math.min(1,t)));
+const div = t => t<0 ? mix(css('--div-mid'), css('--div-neg'), Math.min(1,-t)) : mix(css('--div-mid'), css('--div-pos'), Math.min(1,t));
+const fmt = (v,n=3) => (+v).toFixed(n);
+const S = D.stats;
+
+/* ---------- KPIs ---------- */
+$('#kpis').innerHTML = [
+  [S.n_cells.toLocaleString(), '細胞（QC 後）'], [S.n_genes.toLocaleString(), 'モデル遺伝子'], [S.n_tfs, 'TF モチーフ'],
+  [S.epochs, '学習エポック'], [fmt(S.vel_cos,2), '速度コサイン（平均）'], [S.nA_kept.toLocaleString(), 'context A 細胞をカバー'],
+].map(([b,s]) => `<div class="card kpi"><b>${b}</b><span>${s}</span></div>`).join('');
+$('#k_max').textContent = S.max_abs_dx; $('#k_pc1').textContent = Math.round(S.var_exp[0]*100) + '%';
+$('#k_sp').textContent = S.lt_spearman; $('#k_corr').textContent = S.corr_norm_expr;
+$('#k_ng').textContent = S.n_genes.toLocaleString(); $('#k_nv').textContent = S.n_vel_genes;
+$('#k_nA').textContent = S.nA_kept.toLocaleString(); $('#k_nP').textContent = S.nA_pbmc;
+$('#k_self').textContent = Math.round(S.self_neg_frac*100) + '%';
+
+/* ---------- generic canvas scatter with hover ---------- */
+function scatter(cv, pts, opt){
+  const dpr = devicePixelRatio || 1, W = cv.clientWidth, H = +cv.getAttribute('height');
+  cv.width = W*dpr; cv.height = H*dpr; cv.style.height = H + 'px';
+  const g = cv.getContext('2d'); g.setTransform(dpr,0,0,dpr,0,0); g.clearRect(0,0,W,H);
+  const pad = opt.axes ? {l:46,r:10,t:8,b:44} : {l:6,r:6,t:6,b:6};
+  const xs = pts.map(p=>p.x), ys = pts.map(p=>p.y);
+  let x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+  if (opt.equal){ const k = Math.max((x1-x0)/(W-pad.l-pad.r), (y1-y0)/(H-pad.t-pad.b));
+    const cx = (x0+x1)/2, cy = (y0+y1)/2, hx = k*(W-pad.l-pad.r)/2, hy = k*(H-pad.t-pad.b)/2; x0 = cx-hx; x1 = cx+hx; y0 = cy-hy; y1 = cy+hy; }
+  const sx = v => pad.l + (v-x0)/(x1-x0||1)*(W-pad.l-pad.r), sy = v => H-pad.b - (v-y0)/(y1-y0||1)*(H-pad.t-pad.b);
+  if (opt.axes){
+    g.strokeStyle = css('--grid'); g.fillStyle = css('--text2'); g.font = '11px system-ui'; g.lineWidth = 1;
+    for (let i=0;i<=4;i++){ const yv = y0+(y1-y0)*i/4, y = sy(yv); g.beginPath(); g.moveTo(pad.l,y); g.lineTo(W-pad.r,y); g.stroke();
+      g.textAlign='right'; g.fillText(yv.toFixed(opt.yd??1), pad.l-5, y+4);
+      const xv = x0+(x1-x0)*i/4; g.textAlign='center'; g.fillText(xv.toFixed(opt.xd??1), sx(xv), H-pad.b+14); }
+    g.textAlign='center'; g.fillText(opt.xl, (pad.l+W-pad.r)/2, H-6); g.save(); g.translate(11,pad.t); g.rotate(-Math.PI/2); g.fillText(opt.yl,0,0); g.restore();
+  }
+  const order = pts.map((_,i)=>i).sort((a,b)=>(pts[a].z||0)-(pts[b].z||0));
+  for (const i of order){ const p = pts[i]; g.fillStyle = p.c; g.globalAlpha = p.a ?? .8; g.beginPath(); g.arc(sx(p.x), sy(p.y), p.r||2, 0, 6.3); g.fill(); }
+  g.globalAlpha = 1;
+  cv.onmousemove = e => { const r = cv.getBoundingClientRect(), mx = e.clientX-r.left, my = e.clientY-r.top; let best=-1, bd=144;
+    for (let i=0;i<pts.length;i++){ const dx=sx(pts[i].x)-mx, dy=sy(pts[i].y)-my, d=dx*dx+dy*dy; if (d<bd){bd=d;best=i;} }
+    best<0 ? hideTip() : showTip(e, opt.tip(best)); };
+  cv.onmouseleave = hideTip;
+  cv.onclick = e => { if (!opt.click) return; const r = cv.getBoundingClientRect(), mx = e.clientX-r.left, my = e.clientY-r.top; let best=-1, bd=144;
+    for (let i=0;i<pts.length;i++){ const dx=sx(pts[i].x)-mx, dy=sy(pts[i].y)-my, d=dx*dx+dy*dy; if (d<bd){bd=d;best=i;} } if (best>=0) opt.click(best); };
+}
+
+/* ---------- UMAP ---------- */
+const C = D.cells, N = C.x.length;
+$('#ctPick').innerHTML = D.cts.map((c,i)=>`<option value="${i}">${c}</option>`).join('');
+function drawUmap(){
+  const by = $('#colorBy').value, pick = +$('#ctPick').value; $('#ctPickWrap').hidden = by !== 'ct';
+  let col, z, leg;
+  if (by === 'ct'){ col = i => C.ct[i]===pick ? css('--s1') : css('--dim'); z = i => C.ct[i]===pick ? 1 : 0;
+    leg = `<span><i class="sw" style="background:var(--s1)"></i>${D.cts[pick]}</span><span><i class="sw" style="background:var(--dim)"></i>その他</span>`; }
+  else if (by === 'nA'){ const mx = Math.log1p(Math.max(...C.nA)); col = i => C.nA[i] ? seq(.25+.75*Math.log1p(C.nA[i])/mx) : css('--dim'); z = i => C.nA[i];
+    leg = `<span><i class="sw" style="background:var(--dim)"></i>対応なし</span><span>1<i class="ramp" style="background:linear-gradient(90deg,${seq(.25)},${seq(1)})"></i>${Math.max(...C.nA)} 細胞（対数）</span>`; }
+  else { const v = C[by], lo = Math.min(...v), hi = Math.max(...v); col = i => seq((v[i]-lo)/(hi-lo)); z = () => 0;
+    leg = `<span>${fmt(lo,2)}<i class="ramp" style="background:linear-gradient(90deg,${seq(0)},${seq(1)})"></i>${fmt(hi,2)}</span>`; }
+  $('#umapLegend').innerHTML = leg;
+  const pts = Array.from({length:N}, (_,i) => ({x:C.x[i], y:C.y[i], c:col(i), z:z(i), r:1.8}));
+  scatter($('#umap'), pts, {tip: i => `<b>${D.cts[C.ct[i]]}</b><br>DynaVelo 潜在時間 ${fmt(C.lt[i])} (±${fmt(C.ltsd[i])})<br>scVelo 潜在時間 ${fmt(C.lts[i])}<br>速度コサイン ${fmt(C.cos[i])}<br>context A 対応 ${C.nA[i]} 細胞`});
+}
+$('#colorBy').onchange = drawUmap; $('#ctPick').onchange = drawUmap;
+
+$('#ctTable').innerHTML = '<thead><tr><th>細胞種</th><th>細胞数</th><th>DynaVelo 潜在時間</th><th>scVelo 潜在時間</th><th>速度コサイン</th><th>context A</th></tr></thead><tbody>' +
+  D.ct_table.map(r => `<tr><td>${r.celltype}</td><td>${r.n.toLocaleString()}</td><td>${fmt(r.lt)}</td><td>${fmt(r.lts)}</td><td>${fmt(r.cos)}</td><td>${r.nA.toLocaleString()} <small>(${r.nAcells})</small></td></tr>`).join('') + '</tbody>';
+
+/* ---------- line charts ---------- */
+function lineChart(el, x, series, yd){
+  const W = 520, H = 240, p = {l:54,r:12,t:10,b:40};
+  const all = series.flatMap(s=>s.y), y0 = Math.min(...all), y1 = Math.max(...all), x0 = x[0], x1 = x[x.length-1];
+  const sx = v => p.l+(v-x0)/(x1-x0)*(W-p.l-p.r), sy = v => H-p.b-(v-y0)/(y1-y0)*(H-p.t-p.b);
+  let s = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto">`;
+  for (let i=0;i<=4;i++){ const v = y0+(y1-y0)*i/4; s += `<line x1="${p.l}" x2="${W-p.r}" y1="${sy(v)}" y2="${sy(v)}" stroke="var(--grid)"/><text x="${p.l-6}" y="${sy(v)+4}" text-anchor="end">${v.toFixed(yd)}</text>`; }
+  for (let i=0;i<=4;i++){ const v = Math.round(x0+(x1-x0)*i/4); s += `<text x="${sx(v)}" y="${H-22}" text-anchor="middle">${v}</text>`; }
+  s += `<text x="${(p.l+W-p.r)/2}" y="${H-5}" text-anchor="middle">エポック</text>`;
+  for (const se of series) s += `<path d="M${x.map((v,i)=>sx(v)+','+sy(se.y[i])).join('L')}" fill="none" stroke="${se.c}" stroke-width="2"/>`;
+  s += `<line id="ch" y1="${p.t}" y2="${H-p.b}" stroke="var(--muted)" visibility="hidden"/><rect x="${p.l}" y="${p.t}" width="${W-p.l-p.r}" height="${H-p.t-p.b}" fill="transparent"/></svg>`;
+  el.innerHTML = s; const svg = el.firstChild, ch = svg.querySelector('#ch');
+  svg.onmousemove = e => { const r = svg.getBoundingClientRect(), fx = (e.clientX-r.left)/r.width*W; let i = Math.round((fx-p.l)/(W-p.l-p.r)*(x.length-1)); i = Math.max(0,Math.min(x.length-1,i));
+    ch.setAttribute('x1',sx(x[i])); ch.setAttribute('x2',sx(x[i])); ch.setAttribute('visibility','visible');
+    showTip(e, `<b>エポック ${x[i]}</b><br>` + series.map(se=>`${se.n} ${se.y[i].toFixed(yd)}`).join('<br>')); };
+  svg.onmouseleave = () => { ch.setAttribute('visibility','hidden'); hideTip(); };
+}
+
+/* ---------- perturbations ---------- */
+const P = D.pert, NP = P.gene.length;
+function drawPert(){
+  scatter($('#pcs'), P.gene.map((g,i)=>({x:P.pc1[i], y:P.pc2[i], c:P.tf[i]?css('--s1'):css('--dim'), z:P.tf[i], r:P.tf[i]?3:2})),
+    {axes:true, equal:true, xd:0, yd:0, xl:'PC1 スコア (×10⁻³)', yl:'PC2', tip:i=>pertTip(i), click:i=>selectPert(i)});
+  scatter($('#nx'), P.gene.map((g,i)=>({x:P.expr[i], y:P.norm[i], c:P.tf[i]?css('--s1'):css('--dim'), z:P.tf[i], r:P.tf[i]?3:2})),
+    {axes:true, xd:1, yd:0, xl:'摂動遺伝子の平均 log1p 発現', yl:'効果ノルム (×10⁻³)', tip:i=>pertTip(i), click:i=>selectPert(i)});
+}
+const pertTip = i => `<b>${P.gene[i]}</b>${P.tf[i]?' · モチーフ TF':''}<br>効果ノルム ${P.norm[i]}<br>発現細胞の割合 ${fmt(P.frac[i],2)}<br>潜在時間の変化 ${P.dt[i]}<br><small>クリックで詳細</small>`;
+function bars(el, rows, color){ const mx = Math.max(...rows.map(r=>Math.abs(r[1])));
+  el.innerHTML = rows.map(r=>`<span>${r[0]}</span><span><i class="b" style="display:block;width:${Math.abs(r[1])/mx*100}%;background:${color}"></i></span><span>${r[1]>0?'+':''}${r[1]}</span>`).join(''); }
+bars($('#pcNeg'), D.pc1.neg, 'var(--div-neg)'); bars($('#pcPos'), D.pc1.pos, 'var(--div-pos)');
+
+let sortKey = 'norm', sel = P.gene.indexOf('LEF1');
+function drawTable(){
+  const q = $('#q').value.trim().toUpperCase(), tf = $('#tfOnly').checked;
+  let idx = [...Array(NP).keys()].filter(i => (!q || P.gene[i].toUpperCase().includes(q)) && (!tf || P.tf[i]));
+  idx.sort((a,b) => Math.abs(P[sortKey][b]) - Math.abs(P[sortKey][a])); const shown = idx.slice(0,60);
+  const cols = [['norm','効果ノルム'],['self','自身の変化'],['dt','潜在時間Δ'],['frac','発現割合'],['cpc1','PC1 との cos']];
+  $('#pt').innerHTML = '<thead><tr><th>遺伝子</th>' + cols.map(([k,l])=>`<th class="sortable" data-k="${k}">${l}${k===sortKey?' ▼':''}</th>`).join('') + '</tr></thead><tbody>' +
+    shown.map(i=>`<tr class="click${i===sel?' sel':''}" data-i="${i}"><td>${P.gene[i]}${P.tf[i]?' <small>TF</small>':''}</td>${cols.map(([k])=>`<td>${P[k][i]}</td>`).join('')}</tr>`).join('') +
+    `</tbody>`;
+  $('#pt').querySelectorAll('th.sortable').forEach(th => th.onclick = () => { sortKey = th.dataset.k; drawTable(); });
+  $('#pt').querySelectorAll('tr.click').forEach(tr => tr.onclick = () => selectPert(+tr.dataset.i));
+}
+function selectPert(i){ sel = i; drawTable(); const t = P.top[i];
+  $('#detail').innerHTML = `<h3>${P.gene[i]} をノックダウン</h3><p class="small">他遺伝子への効果ノルム ${P.norm[i]}・自身の変化 ${P.self[i]}・潜在時間の変化 ${P.dt[i]}（いずれも ×10⁻³）</p>
+    <div class="grid" style="grid-template-columns:1fr 1fr;gap:16px"><div><small>下がる遺伝子</small><div class="bars" id="dN"></div></div><div><small>上がる遺伝子</small><div class="bars" id="dP"></div></div></div>`;
+  bars($('#dN'), t[0].map((j,k)=>[P.gene[j], t[1][k]]), 'var(--div-neg)'); bars($('#dP'), t[2].map((j,k)=>[P.gene[j], t[3][k]]), 'var(--div-pos)'); }
+$('#q').oninput = drawTable; $('#tfOnly').onchange = drawTable;
+
+/* ---------- heatmaps ---------- */
+function heat(el, rows, cols, M, unit){
+  const mx = Math.max(...M.flat().map(Math.abs));
+  el.innerHTML = '<table class="hm"><thead><tr><th></th>' + cols.map(c=>`<th class="col">${c}</th>`).join('') + '</tr></thead><tbody>' +
+    rows.map((r,i)=>`<tr><th style="text-align:right">${r}</th>${cols.map((c,j)=>`<td data-t="<b>${r}</b> × ${c}<br>${M[i][j]>0?'+':''}${M[i][j]} ${unit}" style="background:${div(M[i][j]/mx)}"></td>`).join('')}</tr>`).join('') + '</tbody></table>';
+  el.querySelectorAll('td').forEach(td => { td.onmousemove = e => showTip(e, td.dataset.t); td.onmouseleave = hideTip; });
+}
+
+function drawAll(){
+  drawUmap(); drawPert(); drawTable(); selectPert(sel);
+  lineChart($('#chVel'), D.train.epoch, [{n:'コサイン', y:D.train.vel_cos, c:'var(--s1)'}], 2);
+  lineChart($('#chLoss'), D.train.epoch, [{n:'訓練', y:D.train.loss_train, c:'var(--s1)'}, {n:'テスト', y:D.train.loss_test, c:'var(--s2)'}], 0);
+  heat($('#hmKO'), D.tfko.tfs, D.tfko.cts, D.tfko.dlt, '×10⁻³');
+  heat($('#hmMV'), D.motif.tfs, D.motif.cts, D.motif.v, '');
+}
+drawAll();
+let rt; addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { drawUmap(); drawPert(); }, 150); });
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', drawAll);
+</script>
+</body>
+</html>

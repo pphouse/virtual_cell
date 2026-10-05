@@ -29,6 +29,8 @@ testpaths = ["tests"]
 
 [tool.ruff]
 line-length = 100
+# one-off analysis scripts run against the upstream DynaVelo clone (docs/11)
+extend-exclude = ["dynavelo"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
