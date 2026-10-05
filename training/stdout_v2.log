@@ -1,0 +1,183 @@
+(5225, 3625) (5225, 189) cuda:0
+Epoch	loss_train	loss_test	nll_x	nll_y	loss_vel	loss_con	kl_z0	kl_t
+/home/azureuser/vcc/DynaVelo/dynavelo/models.py:473: FutureWarning: We've integrated functorch into PyTorch. As the final step of the integration, `functorch.jacrev` is deprecated as of PyTorch 2.0 and will be deleted in a future version of PyTorch >= 2.3. Please use `torch.func.jacrev` instead; see the PyTorch 2.0 release notes and/or the `torch.func` migration guide for more details https://pytorch.org/docs/main/func.migrating.html
+  Jx = vmap(jacrev(self.decoder_net_x))(zx)
+/home/azureuser/vcc/DynaVelo/dynavelo/models.py:473: FutureWarning: We've integrated functorch into PyTorch. As the final step of the integration, `functorch.vmap` is deprecated as of PyTorch 2.0 and will be deleted in a future version of PyTorch >= 2.3. Please use `torch.vmap` instead; see the PyTorch 2.0 release notes and/or the `torch.func` migration guide for more details https://pytorch.org/docs/main/func.migrating.html
+  Jx = vmap(jacrev(self.decoder_net_x))(zx)
+/home/azureuser/vcc/DynaVelo/dynavelo/models.py:474: FutureWarning: We've integrated functorch into PyTorch. As the final step of the integration, `functorch.jacrev` is deprecated as of PyTorch 2.0 and will be deleted in a future version of PyTorch >= 2.3. Please use `torch.func.jacrev` instead; see the PyTorch 2.0 release notes and/or the `torch.func` migration guide for more details https://pytorch.org/docs/main/func.migrating.html
+  Jy = vmap(jacrev(self.decoder_net_y))(zy)
+/home/azureuser/vcc/DynaVelo/dynavelo/models.py:474: FutureWarning: We've integrated functorch into PyTorch. As the final step of the integration, `functorch.vmap` is deprecated as of PyTorch 2.0 and will be deleted in a future version of PyTorch >= 2.3. Please use `torch.vmap` instead; see the PyTorch 2.0 release notes and/or the `torch.func` migration guide for more details https://pytorch.org/docs/main/func.migrating.html
+  Jy = vmap(jacrev(self.decoder_net_y))(zy)
+/home/azureuser/vcc/DynaVelo/dynavelo/models.py:473: FutureWarning: We've integrated functorch into PyTorch. As the final step of the integration, `functorch.jacrev` is deprecated as of PyTorch 2.0 and will be deleted in a future version of PyTorch >= 2.3. Please use `torch.func.jacrev` instead; see the PyTorch 2.0 release notes and/or the `torch.func` migration guide for more details https://pytorch.org/docs/main/func.migrating.html
+  Jx = vmap(jacrev(self.decoder_net_x))(zx)
+/home/azureuser/vcc/DynaVelo/dynavelo/models.py:473: FutureWarning: We've integrated functorch into PyTorch. As the final step of the integration, `functorch.vmap` is deprecated as of PyTorch 2.0 and will be deleted in a future version of PyTorch >= 2.3. Please use `torch.vmap` instead; see the PyTorch 2.0 release notes and/or the `torch.func` migration guide for more details https://pytorch.org/docs/main/func.migrating.html
+  Jx = vmap(jacrev(self.decoder_net_x))(zx)
+/home/azureuser/vcc/DynaVelo/dynavelo/models.py:474: FutureWarning: We've integrated functorch into PyTorch. As the final step of the integration, `functorch.jacrev` is deprecated as of PyTorch 2.0 and will be deleted in a future version of PyTorch >= 2.3. Please use `torch.func.jacrev` instead; see the PyTorch 2.0 release notes and/or the `torch.func` migration guide for more details https://pytorch.org/docs/main/func.migrating.html
+  Jy = vmap(jacrev(self.decoder_net_y))(zy)
+/home/azureuser/vcc/DynaVelo/dynavelo/models.py:474: FutureWarning: We've integrated functorch into PyTorch. As the final step of the integration, `functorch.vmap` is deprecated as of PyTorch 2.0 and will be deleted in a future version of PyTorch >= 2.3. Please use `torch.vmap` instead; see the PyTorch 2.0 release notes and/or the `torch.func` migration guide for more details https://pytorch.org/docs/main/func.migrating.html
+  Jy = vmap(jacrev(self.decoder_net_y))(zy)
+1	47180.16	40885.008	35892.734	3702.5122	-0.40672877	0.008022773	5.2708993	0.005919344
+2	36144.117	32730.682	31398.162	2547.1829	-0.47728774	0.0074910363	3.4807005	0.0026068292
+3	30525.771	28892.229	28921.28	1956.4115	-0.5123416	0.006606844	3.0676098	0.004276371
+4	27486.383	27125.63	28160.166	1755.7025	-0.5200535	0.00518058	2.3519316	0.0065564155
+5	25648.113	25395.93	26630.795	1473.0679	-0.55619514	0.0072694807	2.7680826	0.013241161
+6	24234.643	24206.97	25784.25	1456.904	-0.5514136	0.004048854	2.4195604	0.019905323
+7	22786.248	22328.287	24097.768	1414.4785	-0.5488163	0.0031032264	2.1947637	0.078404374
+8	21336.244	21076.309	22874.428	1340.3988	-0.564986	0.0013371335	2.260632	0.23734139
+9	20128.32	19798.807	22333.703	1428.5137	-0.54297984	0.0027873337	1.2553854	0.18313229
+10	19000.715	18666.111	21375.693	1365.1337	-0.5543383	0.003129423	1.2223418	0.21503372
+11	18089.951	18027.229	20946.814	1379.1282	-0.5676349	0.0016255734	1.1999385	0.16144194
+12	17422.893	17576.17	20453.48	1449.2744	-0.57753736	0.0103350375	1.1575495	0.18788876
+13	17062.611	16908.324	19915.312	1273.0468	-0.5816304	0.002667638	1.3048364	0.20475687
+14	16687.75	16838.469	19876.998	1341.3458	-0.5772489	0.006303168	1.1591192	0.17046393
+15	16411.428	16588.04	19607.08	1331.7346	-0.58184326	0.0038373584	1.2482356	0.18104635
+16	16045.446	16151.898	19461.6	1282.5858	-0.58502954	0.0032322647	1.0635359	0.16214891
+17	15935.014	16040.416	19350.508	1268.9645	-0.60441446	0.0074541843	1.2440575	0.14648955
+18	15783.076	16020.81	19332.242	1450.5796	-0.59154356	0.0016654537	0.99616414	0.14060527
+19	15623.452	15698.405	18998.416	1335.6593	-0.5813718	0.0037410678	0.9884196	0.15221952
+20	15409.616	15692.735	18976.787	1412.238	-0.5947403	0.0033889771	1.0762857	0.1409391
+21	15274.458	15671.409	18941.793	1393.1152	-0.5972807	0.0151402	1.0283026	0.12960328
+22	15151.095	15454.179	18808.682	1355.8778	-0.5917918	0.0025744906	1.0436432	0.13815047
+23	15044.246	15387.246	18698.457	1339.8259	-0.60296607	0.0019663023	1.153628	0.20533179
+24	14912.558	15151.158	18591.809	1313.7985	-0.60658145	0.019876007	0.9710559	0.14155112
+25	14842.21	14937.161	18494.06	1304.7407	-0.6152534	0.0016392906	1.1301136	0.14438497
+26	14755.71	15215.182	18566.545	1432.6146	-0.6050724	0.003779253	1.0965332	0.13242424
+INFO: Early stopping counter 1 of 10
+27	14815.112	14873.057	18486.006	1303.3755	-0.62527716	0.0035447255	1.1563725	0.14462939
+28	14629.326	14674.174	18503.02	1245.4321	-0.63085395	0.0011493585	1.0726621	0.15010601
+29	14533.806	14649.825	18451.926	1319.2086	-0.6263127	0.005951616	0.9542494	0.12805264
+30	14470.901	14728.323	18371.764	1358.9769	-0.6357508	0.013019749	1.0695144	0.15537822
+INFO: Early stopping counter 1 of 10
+31	14401.492	14628.0	18442.137	1375.6202	-0.64301324	0.0025907035	1.0837492	0.1307212
+32	14496.791	14618.525	18414.516	1259.2411	-0.6289231	0.00085898966	1.0941756	0.1312333
+33	14382.42	14655.185	18404.562	1393.0007	-0.6264236	0.0013698051	0.9861973	0.121961
+INFO: Early stopping counter 1 of 10
+34	14262.118	14579.932	18327.197	1287.9407	-0.63376963	0.009698288	1.0916431	0.11386526
+35	14286.224	14303.67	18307.754	1231.0734	-0.6496911	0.0017841905	1.144093	0.09981655
+36	14203.845	14510.841	18299.756	1331.6125	-0.62872624	0.0018002292	1.0403539	0.10837983
+INFO: Early stopping counter 1 of 10
+37	14135.758	14682.216	18345.291	1315.214	-0.6286195	0.009581187	1.0943967	0.11769735
+INFO: Early stopping counter 2 of 10
+38	14175.647	14556.966	18365.305	1296.5017	-0.6353115	0.0024932215	1.1045452	0.11879572
+INFO: Early stopping counter 3 of 10
+39	14009.557	14527.447	18320.572	1383.8057	-0.63995475	0.0016556613	1.095658	0.11040113
+INFO: Early stopping counter 4 of 10
+40	14105.928	14368.863	18251.64	1236.8704	-0.6522877	0.011672059	1.1634787	0.12303178
+INFO: Early stopping counter 5 of 10
+41	14006.71	14360.673	18299.135	1375.9961	-0.6492886	0.0018349836	1.027676	0.13240302
+INFO: Early stopping counter 6 of 10
+42	13836.888	14105.125	18132.146	1256.3539	-0.6452083	0.0017595155	1.0390964	0.1120159
+43	13972.278	14155.81	18180.941	1274.8606	-0.650159	0.0021930402	1.0730803	0.10658878
+INFO: Early stopping counter 1 of 10
+44	13948.336	14475.037	18192.012	1347.4043	-0.6269399	0.0076457094	1.0148431	0.1137191
+INFO: Early stopping counter 2 of 10
+45	13837.581	14278.909	18072.46	1320.7241	-0.64198446	0.0019497477	1.1338052	0.15226488
+INFO: Early stopping counter 3 of 10
+46	13766.771	14010.645	18149.824	1222.1248	-0.6574208	0.0014025385	1.0865391	0.11234061
+47	13772.656	14126.569	18119.0	1167.1432	-0.6420418	0.0018688695	1.1235996	0.11855275
+INFO: Early stopping counter 1 of 10
+48	13722.384	14065.416	18062.027	1259.8823	-0.64617085	0.0013165913	1.0850251	0.107025
+INFO: Early stopping counter 2 of 10
+49	13737.614	14053.975	18088.5	1173.4631	-0.6506758	0.008525799	1.1067222	0.10678875
+INFO: Early stopping counter 3 of 10
+50	13694.258	14159.343	18073.465	1306.4442	-0.6447188	0.001339621	1.0715721	0.14165418
+INFO: Early stopping counter 4 of 10
+51	13827.859	13946.275	18099.574	1163.0264	-0.6542874	0.0013629938	1.0826603	0.13025741
+52	13696.143	14223.801	18101.553	1243.0863	-0.64351606	0.008389972	1.1190261	0.11139617
+INFO: Early stopping counter 1 of 10
+Repetitive time
+53	13804.323	14254.831	18218.441	1278.3339	-0.65141064	0.0017464547	1.1298642	0.12483575
+INFO: Early stopping counter 2 of 10
+54	13618.363	14321.334	18095.941	1294.5032	-0.6295935	0.0060485853	1.0664501	0.099888906
+INFO: Early stopping counter 3 of 10
+55	13735.813	14038.885	18105.514	1260.5458	-0.6592829	0.0012008402	1.1261666	0.12748018
+INFO: Early stopping counter 4 of 10
+56	13614.175	13990.894	18048.498	1206.573	-0.64897305	0.0017968407	1.0826585	0.12492746
+INFO: Early stopping counter 5 of 10
+57	13609.439	13987.669	18057.867	1237.8473	-0.65531456	0.0012609317	1.114512	0.1179776
+INFO: Early stopping counter 6 of 10
+58	13543.215	14046.728	18096.195	1209.9395	-0.65105206	0.0010714718	1.1293883	0.111010365
+INFO: Early stopping counter 7 of 10
+59	13559.011	13928.838	18104.871	1227.037	-0.6649122	0.0010298092	1.1095489	0.12620264
+60	13666.941	14065.769	18111.273	1211.6222	-0.6526022	0.0012175224	1.1236951	0.13302507
+INFO: Early stopping counter 1 of 10
+61	13574.596	14240.87	18126.559	1229.6143	-0.64736444	0.009790873	1.1447649	0.115665205
+INFO: Early stopping counter 2 of 10
+Repetitive time
+62	13490.072	14087.693	18034.547	1229.9094	-0.6504316	0.0013491916	1.2032545	0.110806175
+INFO: Early stopping counter 3 of 10
+63	13512.018	13921.902	18016.742	1162.6609	-0.65364534	0.0014192102	1.1295735	0.13518977
+64	13504.177	13904.592	17969.498	1165.6237	-0.6500374	0.0011228282	1.1522716	0.106343985
+65	13508.344	14085.347	18018.588	1226.009	-0.6392726	0.0016010687	1.1127756	0.1046905
+INFO: Early stopping counter 1 of 10
+66	13446.741	14033.02	18007.764	1253.181	-0.65101874	0.00144319	1.1594478	0.108380064
+INFO: Early stopping counter 2 of 10
+67	13558.606	14088.675	18022.848	1212.928	-0.6446578	0.0014348875	1.1788319	0.10629583
+INFO: Early stopping counter 3 of 10
+68	13482.033	14052.04	18055.793	1290.9259	-0.65795785	0.0017610134	1.1694783	0.09781214
+INFO: Early stopping counter 4 of 10
+69	13503.251	13900.6455	18001.326	1157.52	-0.65144193	0.0030414488	1.1303343	0.09547024
+70	13488.61	13855.53	18016.54	1170.8589	-0.6704934	0.013134908	1.1445446	0.097171195
+71	13524.61	13920.144	17950.482	1195.5809	-0.65137506	0.0012660552	1.1609228	0.114246495
+INFO: Early stopping counter 1 of 10
+72	13449.461	13922.517	18008.803	1132.2899	-0.65734214	0.0062283957	1.1705092	0.12205271
+INFO: Early stopping counter 2 of 10
+73	13450.497	13970.273	18049.322	1218.6156	-0.6597584	0.0015193986	1.1721566	0.11256893
+INFO: Early stopping counter 3 of 10
+74	13470.445	13761.518	17954.057	1189.1101	-0.66604555	0.0023341014	1.1419816	0.11348185
+75	13406.58	13965.955	18078.312	1229.4161	-0.6613579	0.002094113	1.1439365	0.10692779
+INFO: Early stopping counter 1 of 10
+76	13360.878	13969.326	18062.225	1223.7545	-0.6588419	0.001129072	1.1589268	0.101550415
+INFO: Early stopping counter 2 of 10
+77	13364.127	13765.606	17990.18	1163.8452	-0.6634492	0.00211707	1.117066	0.10783695
+INFO: Early stopping counter 3 of 10
+78	13509.987	13769.117	17981.963	1126.5306	-0.663495	0.0016490549	1.1810794	0.09800326
+INFO: Early stopping counter 4 of 10
+79	13293.034	13784.243	18001.469	1164.5154	-0.66770446	0.0013283859	1.186082	0.095936604
+INFO: Early stopping counter 5 of 10
+80	13453.225	13764.071	18002.049	1147.1769	-0.6661223	0.0012616359	1.1585523	0.10490092
+INFO: Early stopping counter 6 of 10
+81	13391.86	13996.3545	18045.629	1230.5013	-0.6587409	0.0015060726	1.1930339	0.099539205
+INFO: Early stopping counter 7 of 10
+82	13395.615	13774.243	18027.95	1112.4249	-0.66783756	0.0015879762	1.1947283	0.101636305
+INFO: Early stopping counter 8 of 10
+83	13374.268	13794.463	17980.805	1118.3677	-0.6564856	0.0011172062	1.152483	0.0964936
+INFO: Early stopping counter 9 of 10
+84	13405.404	13986.602	17999.61	1179.0161	-0.64329016	0.0011300995	1.1357076	0.09386839
+INFO: Early stopping counter 10 of 10
+INFO: Early stopping
+training took 35.0 min
+Loaded ckpt from ../checkpoints/PBMC/cluster0_3/PBMC_cluster0_3_DynaVelo_num_hidden_200_zxdim_50_zydim_50_k_z0_1000_k_t_1000_k_velocity_10000_k_consistency_10000_seed_0.pth
+n:  0
+/home/azureuser/vcc/DynaVelo/dynavelo/models.py:629: FutureWarning: We've integrated functorch into PyTorch. As the final step of the integration, `functorch.jacrev` is deprecated as of PyTorch 2.0 and will be deleted in a future version of PyTorch >= 2.3. Please use `torch.func.jacrev` instead; see the PyTorch 2.0 release notes and/or the `torch.func` migration guide for more details https://pytorch.org/docs/main/func.migrating.html
+  Jx = vmap(jacrev(self.decoder_net_x))(zx)
+/home/azureuser/vcc/DynaVelo/dynavelo/models.py:629: FutureWarning: We've integrated functorch into PyTorch. As the final step of the integration, `functorch.vmap` is deprecated as of PyTorch 2.0 and will be deleted in a future version of PyTorch >= 2.3. Please use `torch.vmap` instead; see the PyTorch 2.0 release notes and/or the `torch.func` migration guide for more details https://pytorch.org/docs/main/func.migrating.html
+  Jx = vmap(jacrev(self.decoder_net_x))(zx)
+/home/azureuser/vcc/DynaVelo/dynavelo/models.py:630: FutureWarning: We've integrated functorch into PyTorch. As the final step of the integration, `functorch.jacrev` is deprecated as of PyTorch 2.0 and will be deleted in a future version of PyTorch >= 2.3. Please use `torch.func.jacrev` instead; see the PyTorch 2.0 release notes and/or the `torch.func` migration guide for more details https://pytorch.org/docs/main/func.migrating.html
+  Jy = vmap(jacrev(self.decoder_net_y))(zy)
+/home/azureuser/vcc/DynaVelo/dynavelo/models.py:630: FutureWarning: We've integrated functorch into PyTorch. As the final step of the integration, `functorch.vmap` is deprecated as of PyTorch 2.0 and will be deleted in a future version of PyTorch >= 2.3. Please use `torch.vmap` instead; see the PyTorch 2.0 release notes and/or the `torch.func` migration guide for more details https://pytorch.org/docs/main/func.migrating.html
+  Jy = vmap(jacrev(self.decoder_net_y))(zy)
+n:  1
+n:  2
+n:  3
+Repetitive time
+n:  4
+Repetitive time
+n:  5
+n:  6
+n:  7
+n:  8
+n:  9
+Repetitive time
+n:  10
+n:  11
+n:  12
+Repetitive time
+n:  13
+n:  14
+n:  15
+n:  16
+n:  17
+n:  18
+n:  19
+saved predictions
